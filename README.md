@@ -1,43 +1,24 @@
-# 🧠 SGR Deep Research - Open-Source Schema-Guided Reasoning System
+# 🦇 SGR Vampi Code - AI Coding Assistant with Schema-Guided Reasoning
 
-## SGR Deep Research is an agent-driven research system with a chat interface. It is can run with small LLMs for a fully local mode.
+## SGR Vampi Code is an intelligent coding assistant powered by Schema-Guided Reasoning (SGR). It can run with small LLMs for fully local development assistance.
 
 This project is developed by the **neuraldeep** community. It is inspired by the Schema-Guided Reasoning (SGR) work and [SGR Agent Demo](https://abdullin.com/schema-guided-reasoning/demo) delivered by "LLM Under the Hood" community and AI R&D Hub of [TIMETOACT GROUP Österreich](https://www.timetoact-group.at)
 
 If you have any questions - feel free to reach out to [Valerii Kovalskii](https://www.linkedin.com/in/vakovalskii/).
 
-Web Interface Video
+**AI Coding Assistant with Streaming JSON and Beautiful Markdown Rendering**
 
-https://github.com/user-attachments/assets/9e1c46c0-0c13-45dd-8b35-a3198f946451
+Production-ready open-source coding assistant using Schema-Guided Reasoning (SGR). Features real-time streaming responses, beautiful terminal UI with Markdown rendering, and comprehensive code manipulation capabilities.
 
-Terminal CLI Video
+## ✨ Key Features
 
-https://github.com/user-attachments/assets/a5e34116-7853-43c2-ba93-2db811b8584a
-
-Production-ready open-source system for automated research using Schema-Guided Reasoning (SGR). Features real-time streaming responses, OpenAI-compatible API, and comprehensive research capabilities with agent interruption support.
-
-## 📊 Summary Table of Agents
-
-| Agent                              | SGR Implementation | ReasoningTool        | Tools                 | API Requests | Selection Mechanism  |
-| ---------------------------------- | ------------------ | -------------------- | --------------------- | ------------ | -------------------- |
-| **1. sgr_agent**                   | Structured Output  | ❌ Built into schema | 6 basic               | 1            | SO Union Type        |
-| **2. tool_calling_agent**          | ❌ Absent          | ❌ Absent            | 6 basic               | 1            | FC "required"        |
-| **3. sgr_tool_calling_agent**      | FC Tool enforced   | ✅ First step FC     | 7 (6 + ReasoningTool) | 2            | FC → FC    TOP AGENT |
-| **4. sgr_auto_tool_calling_agent** | FC Tool optional   | ✅ At model's choice | 7 (6 + ReasoningTool) | 1–2          | FC "auto"            |
-| **5. sgr_so_tool_calling_agent**   | FC → SO → FC auto  | ✅ FC enforced       | 7 (6 + ReasoningTool) | 3            | FC → SO → FC auto    |
-
-## 👥 Open-Source Development Team
-
-This project is built by the community with pure enthusiasm as an open-source initiative:
-
-- **SGR Concept Creator**: [@abdullin](https://t.me/llm_under_hood) - Original Schema-Guided Reasoning concept
-- **Project Coordinator & Vision**: [@VaKovaLskii](https://t.me/neuraldeep) - Team coordination and project direction
-- **Lead Core Developer**: [@virrius](https://t.me/virrius_tech) - Complete system rewrite and core implementation
-- **API Development**: [Pavel Zloi](https://t.me/evilfreelancer) - OpenAI-compatible API layer
-- **Hybrid FC Mode**: [@Shadekss](https://t.me/Shadekss) - Dmitry Sirakov \[Shade\] - SGR integration into Function Calling for Agentic-capable models
-- **DevOps & Deployment**: [@mixaill76](https://t.me/mixaill76) - Infrastructure and build management
-
-*All development is driven by pure enthusiasm and open-source community collaboration. We welcome contributors of all skill levels!*
+- 🧠 **Schema-Guided Reasoning** - Structured thinking for reliable code operations
+- 📝 **Code Analysis & Manipulation** - Read, write, edit, and search through your codebase
+- 🎨 **Beautiful Terminal UI** - Rich formatting with Markdown rendering for responses
+- 🔄 **Streaming JSON Output** - Real-time tool execution with syntax highlighting
+- 💬 **Continuous Dialogue** - Multi-turn conversations with context preservation
+- 🌐 **Multi-language Support** - Responds in the same language as your request
+- 🚀 **Local-First** - Works with small LLMs for fully offline development
 
 ## 🚀 Quick Start
 
@@ -52,415 +33,149 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-### Local Development
+### Installation & Setup
 
 ```bash
-# 1. Setup configuration
-cp config.yaml.example config.yaml
-# Edit config.yaml with your API keys
+# 1. Clone the repository
+git clone https://github.com/vamplabAI/sgr-vampi-code.git
+cd sgr-vampi-code
 
-# 2. Change to src directory and install dependencies
+# 2. Setup configuration
+cp config.yaml.example config.yaml
+# Edit config.yaml with your API settings
+
+# 3. Install dependencies
 uv sync
 
-# 3. Run the server
-uv run python sgr_deep_research
+# 4. Run the interactive chat
+uv run cli_stream.py chat
 ```
 
-### Docker Deployment
+## 🎮 Usage
+
+### Interactive Chat Mode
+
+Start a continuous conversation with the coding assistant:
 
 ```bash
-# 1. Setup configuration
-cp config.yaml.example config.yaml
-# Edit config.yaml with your API keys
+uv run cli_stream.py chat
 
-# 2. Go to the services folder
-cd services
+# With custom typing speed
+uv run cli_stream.py chat --speed 0.005  # Slower
+uv run cli_stream.py chat --speed 0      # Instant
 
-# 3. Building docker images
-docker-compose build
-
-# 4. Deploy with Docker Compose
-docker-compose up -d
-
-# 3. Check health
-curl http://localhost:8010/health
+# With debug logging
+uv run cli_stream.py chat --debug
 ```
 
-______________________________________________________________________
+### Single Task Mode
 
-## 📚 Integration & Examples
-
-<details>
-<summary>🚀 <strong>Python OpenAI Client Examples</strong> - Complete integration guide with streaming & clarifications</summary>
-
-Simple Python examples for using OpenAI client with SGR Deep Research system.
-
-## Prerequisites
+Execute a single coding task:
 
 ```bash
-pip install openai
+uv run cli_stream.py task "Analyze the project structure and list all Python files"
 ```
 
-## Example 1: Basic Research Request
+### Fast Mode (No Typing Effect)
 
-Simple research query without clarifications.
-
-```python
-from openai import OpenAI
-
-# Initialize client
-client = OpenAI(
-    base_url="http://localhost:8010/v1",
-    api_key="dummy",  # Not required for local server
-)
-
-# Make research request
-response = client.chat.completions.create(
-    model="sgr_agent",
-    messages=[{"role": "user", "content": "Research BMW X6 2025 prices in Russia"}],
-    stream=True,
-    temperature=0.4,
-)
-
-# Print streaming response
-for chunk in response:
-    if chunk.choices[0].delta.content:
-        print(chunk.choices[0].delta.content, end="")
-```
-
-## Example 2: Research with Clarification Support
-
-Handle agent clarification requests and continue conversation.
-
-```python
-import json
-from openai import OpenAI
-
-client = OpenAI(base_url="http://localhost:8010/v1", api_key="dummy")
-
-# Step 1: Initial research request
-print("Starting research...")
-response = client.chat.completions.create(
-    model="sgr_agent",
-    messages=[{"role": "user", "content": "Research AI market trends"}],
-    stream=True,
-    temperature=0,
-)
-
-agent_id = None
-clarification_questions = []
-
-# Process streaming response
-for chunk in response:
-    # Extract agent ID from model field
-    if chunk.model and chunk.model.startswith("sgr_agent_"):
-        agent_id = chunk.model
-        print(f"\nAgent ID: {agent_id}")
-
-    # Check for clarification requests
-    if chunk.choices[0].delta.tool_calls:
-        for tool_call in chunk.choices[0].delta.tool_calls:
-            if tool_call.function and tool_call.function.name == "clarification":
-                args = json.loads(tool_call.function.arguments)
-                clarification_questions = args.get("questions", [])
-
-    # Print content
-    if chunk.choices[0].delta.content:
-        print(chunk.choices[0].delta.content, end="")
-
-# Step 2: Handle clarification if needed
-if clarification_questions and agent_id:
-    print(f"\n\nClarification needed:")
-    for i, question in enumerate(clarification_questions, 1):
-        print(f"{i}. {question}")
-
-    # Provide clarification
-    clarification = "Focus on LLM market trends for 2024-2025, global perspective"
-    print(f"\nProviding clarification: {clarification}")
-
-    # Continue with agent ID
-    response = client.chat.completions.create(
-        model=agent_id,  # Use agent ID as model
-        messages=[{"role": "user", "content": clarification}],
-        stream=True,
-        temperature=0,
-    )
-
-    # Print final response
-    for chunk in response:
-        if chunk.choices[0].delta.content:
-            print(chunk.choices[0].delta.content, end="")
-
-print("\n\nResearch completed!")
-```
-
-## Usage Notes
-
-- Replace `localhost:8010` with your server URL
-- The `api_key` can be any string for local server
-- Agent ID is returned in the `model` field during streaming
-- Clarification questions are sent via `tool_calls` with function name `clarification`
-- Use the agent ID as model name to continue conversation
-
-</details>
-
-______________________________________________________________________
-
-<details>
-<summary>⚡ <strong>cURL API Examples</strong> - Direct HTTP requests with agent interruption & clarification flow</summary>
-
-The system provides a fully OpenAI-compatible API with advanced agent interruption and clarification capabilities.
-
-### Basic Research Request
+Get instant responses without the typing animation:
 
 ```bash
-curl -X POST "http://localhost:8010/v1/chat/completions" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "sgr_agent",
-    "messages": [{"role": "user", "content": "Research BMW X6 2025 prices in Russia"}],
-    "stream": true,
-    "max_tokens": 1500,
-    "temperature": 0.4
-  }'
+uv run cli_stream.py fast "Create a new utility function for file parsing"
 ```
 
-### 🔄 Agent Interruption & Clarification Flow
+## 🛠️ Available Tools
 
-When the agent needs clarification, it returns a unique agent ID in the streaming response model field. You can then continue the conversation using this agent ID.
+The SGR Vampi Code agent has access to powerful tools for code manipulation:
 
-#### Step 1: Initial Request
+### File Operations
+- **ReadFileTool** - Read and analyze existing code files
+- **WriteFileTool** - Create new files or overwrite existing ones
+- **EditFileTool** - Make surgical edits to existing files (preferred for modifications)
 
-```bash
-curl -X POST "http://localhost:8010/v1/chat/completions" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "sgr_agent",
-    "messages": [{"role": "user", "content": "Research AI market trends"}],
-    "stream": true,
-    "max_tokens": 1500,
-    "temperature": 0
-  }'
+### Code Search & Discovery
+- **GrepTool** - Search for patterns across the codebase
+- **ListDirectoryTool** - Explore project structure and organization
+- **FindFilesTool** - Locate files by name patterns
+
+### Execution
+- **RunCommandTool** - Execute shell commands (build, test, lint, etc.)
+
+### Reasoning & Planning
+- **ReasoningTool** - Think through problems step-by-step
+- **ClarificationTool** - Ask clarifying questions when needed
+- **FinalAnswerTool** - Provide comprehensive answers in beautiful Markdown format
+
+## 💡 Example Tasks
+
+The coding assistant excels at various development scenarios:
+
+### Code Analysis
+```
+"Analyze the current project structure and explain the architecture"
+"Find all TODO comments in Python files"
+"Show me how the authentication system works"
 ```
 
-#### Step 2: Agent Requests Clarification
-
-The streaming response includes the agent ID in the model field:
-
-```json
-{
-  "model": "sgr_agent_b84d5a01-c394-4499-97be-dad6a5d2cb86",
-  "choices": [{
-    "delta": {
-      "tool_calls": [{
-        "function": {
-          "name": "clarification",
-          "arguments": "{\"questions\":[\"Which specific AI market segment are you interested in (LLM, computer vision, robotics)?\", \"What time period should I focus on (2024, next 5 years)?\", \"Are you looking for global trends or specific geographic regions?\", \"Do you need technical analysis or business/investment perspective?\"]}"
-        }
-      }]
-    }
-  }]
-}
+### Code Creation
+```
+"Create a new utility module for data validation with Pydantic"
+"Add a new API endpoint for user registration"
+"Implement a caching decorator for expensive functions"
 ```
 
-#### Step 3: Continue with Agent ID
-
-```bash
-curl -X POST "http://localhost:8010/v1/chat/completions" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "sgr_agent_b84d5a01-c394-4499-97be-dad6a5d2cb86",
-    "messages": [{"role": "user", "content": "Focus on LLM market trends for 2024-2025, global perspective, business analysis"}],
-    "stream": true,
-    "max_tokens": 1500,
-    "temperature": 0
-  }'
+### Code Modification
+```
+"Refactor the database connection code to use connection pooling"
+"Add error handling to all API endpoints"
+"Update the logging configuration to use structured logging"
 ```
 
-### Agent Management
-
-```bash
-# Get all active agents
-curl http://localhost:8010/agents
-
-# Get specific agent state
-curl http://localhost:8010/agents/{agent_id}/state
-
-# Direct clarification endpoint
-curl -X POST "http://localhost:8010/agents/{agent_id}/provide_clarification" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "messages": [{"role": "user", "content": "Focus on luxury models only"}],
-    "stream": true
-  }'
+### Debugging & Fixes
+```
+"Fix the import errors in the main module"
+"Find and fix potential SQL injection vulnerabilities"
+"Optimize the slow database queries in the user service"
 ```
 
-</details>
+## 🎨 Beautiful Markdown Responses
 
-______________________________________________________________________
+All final answers are automatically formatted in Markdown with:
 
-## 📊 SGR Agent Workflow
+- **Headers** for clear structure
+- **Bold** and *italic* for emphasis
+- `Code blocks` with syntax highlighting
+- Lists for enumeration
+- Tables for structured data
+- Quotes for important notes
+- Links for references
 
-### Agent Execution Sequence
+Example output:
 
-The following diagram shows the complete SGR agent workflow with interruption and clarification support:
+```markdown
+## Analysis Complete
 
-```mermaid
-sequenceDiagram
-    participant Client
-    participant API as FastAPI Server
-    participant Agent as SGR Agent
-    participant LLM as LLM
-    participant Tools as Research Tools
+I've analyzed the project structure. Here's what I found:
 
-    Note over Client, Tools: SGR Deep Research - Agent Workflow
+### Project Architecture
 
-    Client->>API: POST /v1/chat/completions<br/>{"model": "sgr_agent", "messages": [...]}
+The project follows a **modular architecture** with clear separation of concerns:
 
-    API->>Agent: Create new SGR Agent<br/>with unique ID
-    Note over Agent: State: INITED
+1. **Core Module** (`sgr_deep_research/core/`)
+   - `agents/` - Agent implementations
+   - `tools/` - Tool definitions
+   - `models.py` - Data models
 
-    Agent->>Agent: Initialize context<br/>and conversation history
+2. **API Layer** (`sgr_deep_research/api/`)
+   - FastAPI endpoints
+   - Request/response models
 
-    loop SGR Reasoning Loop (max 6 steps)
-        Agent->>Agent: Prepare tools based on<br/>current context limits
-        Agent->>LLM: Structured Output Request<br/>with NextStep schema
+### Key Findings
 
-        LLM-->>API: Streaming chunks
-        API-->>Client: SSE stream with<br/>agent_id in model field
-
-        LLM->>Agent: Parsed NextStep result
-
-        alt Tool: Clarification
-            Note over Agent: State: WAITING_FOR_CLARIFICATION
-            Agent->>Tools: Execute clarification tool
-            Tools->>API: Return clarifying questions
-            API-->>Client: Stream clarification questions
-
-            Client->>API: POST /v1/chat/completions<br/>{"model": "agent_id", "messages": [...]}
-            API->>Agent: provide_clarification()
-            Note over Agent: State: RESEARCHING
-            Agent->>Agent: Add clarification to context
-
-        else Tool: GeneratePlan
-            Agent->>Tools: Execute plan generation
-            Tools->>Agent: Research plan created
-
-        else Tool: WebSearch
-            Agent->>Tools: Execute web search
-            Tools->>Tools: Tavily API call
-            Tools->>Agent: Search results + sources
-            Agent->>Agent: Update context with sources
-
-        else Tool: AdaptPlan
-            Agent->>Tools: Execute plan adaptation
-            Tools->>Agent: Updated research plan
-
-        else Tool: CreateReport
-            Agent->>Tools: Execute report creation
-            Tools->>Tools: Generate comprehensive<br/>report with citations
-            Tools->>Agent: Final research report
-
-        else Tool: ReportCompletion
-            Note over Agent: State: COMPLETED
-            Agent->>Tools: Execute completion
-            Tools->>Agent: Task completion status
-        end
-
-        Agent->>Agent: Add tool result to<br/>conversation history
-        API-->>Client: Stream tool execution result
-
-        break Task Completed
-            Agent->>Agent: Break execution loop
-        end
-    end
-
-    Agent->>API: Finish streaming
-    API-->>Client: Close SSE stream
-
-    Note over Client, Tools: Agent remains accessible<br/>via agent_id for further clarifications
+- ✅ Well-organized code structure
+- ✅ Type hints throughout
+- ⚠️ Some files missing docstrings
 ```
-
-### Schema-Guided Reasoning Capabilities:
-
-1. **🤔 Clarification** - clarifying questions when unclear
-2. **📋 Plan Generation** - research plan creation
-3. **🔍 Web Search** - internet information search
-4. **🔄 Plan Adaptation** - plan adaptation based on results
-5. **📝 Report Creation** - detailed report creation
-6. **✅ Completion** - task completion
-
-## 🧠 SGR vs Function Calling: When to Use Each Approach
-
-### The Problem with Function Calling on Local Models (ReAct Agents)
-
-**Reality Check:** Function Calling works great on OpenAI/Anthropic (80+ [BFCL](https://gorilla.cs.berkeley.edu/leaderboard.html) scores) but fails dramatically on local models \<32B parameters when using true ReAct agents with `tool_mode="auto"`, where the model itself decides when to call tools.
-
-**BFCL Benchmark Results for Qwen3 Models:**
-
-- `Qwen3-8B (FC)`: Only 15% accuracy in Agentic Web Search mode ([BFCL](https://gorilla.cs.berkeley.edu/leaderboard.html) benchmark)
-- `Qwen3-4B (FC)`: Only 2% accuracy in Agentic Web Search mode
-- `Qwen3-1.7B (FC)`: Only 4.5% accuracy in Agentic Web Search mode
-- Even with native FC support, smaller models struggle with deciding **WHEN** to call tools
-- Common result: `{"tool_calls": null, "content": "Text instead of tool call"}`
-
-**Note:** Our team is currently working on creating a specialized benchmark for SGR vs ReAct performance on smaller models. Initial testing confirms that the SGR pipeline enables even smaller models to follow complex task workflows.
-
-### SGR Solution: Forced Reasoning → Deterministic Execution
-
-```python
-# Phase 1: Structured Output reasoning (100% reliable)
-reasoning = model.generate(format="json_schema")
-# {"action": "search", "query": "BMW X6 prices", "reason": "need current data"}
-
-# Phase 2: Deterministic execution (no model uncertainty)
-result = execute_plan(reasoning.actions)
-```
-
-### Architecture by Model Size
-
-| Model Size | Recommended Approach         | FC Accuracy | Why Choose This         |
-| ---------- | ---------------------------- | ----------- | ----------------------- |
-| **\<14B**  | Pure SGR + Structured Output | 15-25%      | FC practically unusable |
-| **14-32B** | SGR + FC hybrid              | 45-65%      | Best of both worlds     |
-| **32B+**   | Native FC with SGR fallback  | 85%+        | FC works reliably       |
-
-### When to Use SGR vs Function Calling
-
-| Use Case                        | Best Approach    | Why                                              |
-| ------------------------------- | ---------------- | ------------------------------------------------ |
-| **Data analysis & structuring** | SGR              | Controlled reasoning with visibility             |
-| **Document processing**         | SGR              | Step-by-step analysis with justification         |
-| **Local models (\<32B)**        | SGR              | Forces reasoning regardless of model limitations |
-| **Multi-agent systems**         | Function Calling | Native agent interruption support                |
-| **External API interactions**   | Function Calling | Direct tool access pattern                       |
-| **Production monitoring**       | SGR              | All reasoning steps visible and loggable         |
-
-### Real-World Results
-
-**Initial Testing Results:**
-
-- SGR enables even small models to follow structured workflows
-- SGR pipeline provides deterministic execution regardless of model size
-- SGR forces reasoning steps that ReAct leaves to model discretion
-
-**Planned Benchmarking:**
-
-- We're developing a comprehensive benchmark comparing SGR vs ReAct across model sizes
-- Initial testing shows promising results for SGR on models as small as 4B parameters
-- Full metrics and performance comparison coming soon
-
-### Hybrid Approach: The Best of Both Worlds
-
-The optimal solution for many production systems is a hybrid approach:
-
-1. **SGR for decision making** - Determine which tools to use
-2. **Function Calling for execution** - Get data and provide agent-like experience
-3. **SGR for final processing** - Structure and format results
-
-This hybrid approach works particularly well for models in the 14-32B range, where Function Calling works sometimes but isn't fully reliable.
-
-**Bottom Line:** Don't force \<32B models to pretend they're GPT-4o in ReAct-style agentic workflows with `tool_mode="auto"`. Let them think structurally through SGR, then execute deterministically.
 
 ## ⚙️ Configuration
 
@@ -472,203 +187,148 @@ This hybrid approach works particularly well for models in the 14-32B range, whe
 cp config.yaml.example config.yaml
 ```
 
-2. **Configure API keys:**
+2. **Configure API settings:**
 
 ```yaml
-# SGR Research Agent - Configuration Template
-# Production-ready configuration for Schema-Guided Reasoning
-# Copy this file to config.yaml and fill in your API keys
-
 # OpenAI API Configuration
 openai:
-  api_key: "your-openai-api-key-here"  # Required: Your OpenAI API key
-  base_url: ""                         # Optional: Alternative URL (e.g., for proxy LiteLLM/vLLM)
-  model: "gpt-4o-mini"                 # Model to use
-  max_tokens: 8000                     # Maximum number of tokens
-  temperature: 0.4                     # Generation temperature (0.0-1.0)
-  proxy: ""                            # Example: "socks5://127.0.0.1:1081" or "http://127.0.0.1:8080" or leave empty for no proxy
-
-# Tavily Search Configuration
-tavily:
-  api_key: "your-tavily-api-key-here"  # Required: Your Tavily API key
-  api_base_url: "https://api.tavily.com"  # Tavily API base URL
-
-# Search Settings
-search:
-  max_results: 10                      # Maximum number of search results
-
-# Scraping Settings
-scraping:
-  enabled: false                       # Enable full text scraping of found pages
-  max_pages: 5                         # Maximum pages to scrape per search
-  content_limit: 1500                  # Character limit for full content per source
+  api_key: "your-api-key-here"        # Your API key
+  base_url: "https://api.openai.com/v1"  # Or your local LLM endpoint
+  model: "gpt-4o-mini"                # Model to use
+  max_tokens: 8000                    # Maximum tokens
+  temperature: 0.4                    # Generation temperature (0.0-1.0)
+  proxy: ""                           # Optional proxy
 
 # Execution Settings
 execution:
-  max_steps: 6                         # Maximum number of execution steps
-  reports_dir: "reports"               # Directory for saving reports
-  logs_dir: "logs"                     # Directory for saving reports
-
-# Prompts Settings
-prompts:
-  prompts_dir: "prompts"               # Directory with prompts
-  tool_function_prompt_file: "tool_function_prompt.txt"  # Tool function prompt file
-  system_prompt_file: "system_prompt.txt"  # System prompt file
+  max_steps: 6                        # Maximum reasoning steps
+  logs_dir: "logs"                    # Log directory
 ```
 
-### Server Configuration
+### CLI Commands
 
-```bash
-# Custom host and port
-python sgr_deep_research --host 127.0.0.1 --port 8080
-```
+Inside the interactive chat, you can use these commands:
 
-## 🤖 Available Agent Models
+- `/exit`, `/quit`, `/q` - Exit the chat
+- `/clear`, `/cls` - Clear the screen
+- `/help`, `/h` - Show help information
 
-### Agent Types Overview
+## 🧠 Schema-Guided Reasoning for Coding
 
-| Agent Model                   | Description                        |
-| ----------------------------- | ---------------------------------- |
-| `sgr_agent`                   | Pure SGR (Schema-Guided Reasoning) |
-| `sgr_tool_calling_agent`      | SGR + Function Calling hybrid      |
-| `sgr_auto_tool_calling_agent` | SGR + Auto Function Calling        |
-| `sgr_so_tool_calling_agent`   | SGR + Structured Output            |
-| `tool_calling_agent`          | Pure Function Calling              |
+### Why SGR for Coding Tasks?
 
-### Models Endpoint
+Traditional ReAct agents struggle with complex coding tasks on smaller models because they need to decide:
+1. **What** to do next
+2. **When** to use tools
+3. **How** to structure the solution
 
-Get the list of available agent models:
-
-```bash
-curl http://localhost:8010/v1/models
-```
-
-## 📝 Reports
-
-Research reports are automatically saved to the `reports/` directory in Markdown format:
-
-```
-reports/YYYYMMDD_HHMMSS_Task_Name.md
-```
-
-### Report Structure
-
-- 📋 **Executive Summary** - Key insights overview
-- 🔍 **Technical Analysis** - Detailed findings with citations
-- 📊 **Key Findings** - Main conclusions
-- 📎 **Sources** - All reference links
-
-### Example Report
-
-See `docs/example_report.md` for a complete sample of SGR research output.
-
-______________________________________________________________________
-
-## 📊 Benchmarking with SimpleQA
-
-We conducted a comprehensive benchmark evaluation using the [SimpleQA](https://huggingface.co/datasets/basicv8vc/SimpleQA) dataset - a factuality benchmark that measures the ability of language models to answer short, fact-seeking questions.
-
-### Our Benchmark Results
-
-![SimpleQA Benchmark Comparison](assets/simpleqa_benchmark_comprasion.png)
-
-**Performance Metrics:**
-
-- **Accuracy:** 86.08%
-- **Correct:** 3,724 answers
-- **Incorrect:** 554 answers
-- **Not Attempted:** 48 answers
-
-**For detailed information** about benchmark configuration, how to run it, and technical details, see the **[Benchmark Documentation](benchmark/README.md)**.
-
-______________________________________________________________________
-
-<details>
-<summary>🛠️ <strong>Advanced Integration Examples</strong> - Production-ready code for streaming, monitoring & state management</summary>
-
-### Python Client
+SGR solves this by forcing structured reasoning first, then executing deterministically:
 
 ```python
-import httpx
+# Phase 1: Structured Reasoning (always happens)
+reasoning = model.generate(format="json_schema")
+# {
+#   "reasoning_steps": ["Read the file", "Identify the issue", "Plan the fix"],
+#   "current_situation": "Found import error in main.py",
+#   "remaining_steps": ["Fix the import", "Verify the change"]
+# }
 
-
-async def research_query(query: str):
-    async with httpx.AsyncClient() as client:
-        async with client.stream(
-            "POST",
-            "http://localhost:8010/v1/chat/completions",
-            json={"messages": [{"role": "user", "content": query}], "stream": True},
-        ) as response:
-            async for chunk in response.aiter_text():
-                print(chunk, end="")
+# Phase 2: Tool Selection & Execution (deterministic)
+tool = select_tool_from_reasoning(reasoning)
+result = execute_tool(tool)
 ```
 
-### Curl with Streaming
+### Coding Workflow
 
-```bash
-curl -N -X POST "http://localhost:8010/v1/chat/completions" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "messages": [{"role": "user", "content": "Research current AI trends"}],
-    "stream": true
-  }'
+The agent follows a structured workflow:
+
+1. **Understand** - Analyze the task and current codebase state
+2. **Plan** - Break down complex changes into steps
+3. **Execute** - Make changes incrementally with verification
+4. **Verify** - Check that changes work as expected
+5. **Report** - Provide clear summary in Markdown format
+
+## 📊 Agent Architecture
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant CLI as CLI Stream
+    participant Agent as SGR Vampi Code
+    participant LLM
+    participant Tools as Coding Tools
+
+    User->>CLI: Enter coding request
+    CLI->>Agent: Create agent with task
+    
+    loop Reasoning Loop (max 6 steps)
+        Agent->>LLM: ReasoningTool (forced first)
+        LLM-->>CLI: Stream reasoning JSON
+        LLM->>Agent: Parsed reasoning
+        
+        Agent->>LLM: Select next tool
+        LLM-->>CLI: Stream tool call JSON
+        
+        alt ReadFileTool
+            Agent->>Tools: Read file
+            Tools->>Agent: File contents
+        else EditFileTool
+            Agent->>Tools: Edit file
+            Tools->>Agent: Edit confirmation
+        else GrepTool
+            Agent->>Tools: Search code
+            Tools->>Agent: Search results
+        else RunCommandTool
+            Agent->>Tools: Execute command
+            Tools->>Agent: Command output
+        else FinalAnswerTool
+            Agent->>Tools: Format answer
+            Tools->>CLI: Markdown response
+            CLI->>User: Beautiful rendered output
+        end
+        
+        Agent->>Agent: Add to conversation history
+        
+        break Task Completed
+            Agent->>Agent: Exit loop
+        end
+    end
 ```
 
-### Agent State Monitoring
+## 🎯 Best Practices
 
-```python
-import httpx
+### When Using the Coding Assistant
 
+1. **Be Specific** - Clear requests get better results
+   - ✅ "Add error handling to the login function in auth.py"
+   - ❌ "Fix the code"
 
-async def monitor_agent(agent_id: str):
-    async with httpx.AsyncClient() as client:
-        response = await client.get(f"http://localhost:8010/agents/{agent_id}/state")
-        state = response.json()
+2. **Provide Context** - Help the agent understand your needs
+   - ✅ "Refactor the database code to use async/await for better performance"
+   - ❌ "Make it faster"
 
-        print(f"Task: {state['task']}")
-        print(f"State: {state['state']}")
-        print(f"Searches used: {state['searches_used']}")
-        print(f"Sources found: {state['sources_count']}")
-```
+3. **Iterative Approach** - Break large tasks into steps
+   - ✅ "First, analyze the authentication flow. Then suggest improvements."
+   - ❌ "Rewrite the entire authentication system"
 
-</details>
+4. **Verify Changes** - Always review what the agent modified
+   - The agent will show you exactly what changed
+   - Use git diff to see the full picture
 
-______________________________________________________________________
+## 👥 Open-Source Development Team
 
-## 🎯 Example Research Tasks
+This project is built by the community with pure enthusiasm as an open-source initiative:
 
-The SGR system excels at various research scenarios:
+- **SGR Concept Creator**: [@abdullin](https://t.me/llm_under_hood) - Original Schema-Guided Reasoning concept
+- **Project Coordinator & Vision**: [@VaKovaLskii](https://t.me/neuraldeep) - Team coordination and project direction
+- **Lead Core Developer**: [@virrius](https://t.me/virrius_tech) - Complete system rewrite and core implementation
+- **Vampi Code Adaptation**: Community effort to adapt SGR for coding tasks
 
-- **Market Research**: "Analyze BMW X6 2025 pricing across European markets"
-- **Technology Trends**: "Research current developments in quantum computing"
-- **Competitive Analysis**: "Compare features of top 5 CRM systems in 2024"
-- **Industry Reports**: "Investigate renewable energy adoption in Germany"
+*All development is driven by pure enthusiasm and open-source community collaboration. We welcome contributors of all skill levels!*
 
-## 🚀 Future Development Plans
+## 🤝 Contributing
 
-Our team is actively working on several exciting enhancements to the SGR Deep Research platform:
-
-### 🔄 Hybrid Mode Integration
-
-- Implementing a hybrid SGR+FC mode directly in the current functionality
-- Allowing seamless switching between SGR and Function Calling based on model capabilities
-- Optimizing performance for mid-range models (14-32B parameters)
-
-### 📊 Comprehensive Benchmarking
-
-- Developing a specialized benchmark suite for comparing SGR vs ReAct approaches
-- Testing across various model sizes and architectures
-- Measuring performance, accuracy, and reliability metrics
-
-### 🧠 MCP Functionality
-
-- Adding support for [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) functionality
-- Standardizing agent tooling and reasoning interfaces
-- Enhancing interoperability with other agent frameworks
-
-## 🤝 Open-Source Contributing
-
-We welcome contributions from the community! SGR Deep Research is an open-source project designed as a production-ready service with extensible architecture.
+We welcome contributions from the community! Here's how you can help:
 
 ### How to Contribute
 
@@ -680,21 +340,32 @@ We welcome contributions from the community! SGR Deep Research is an open-source
 3. **Make your changes**
 4. **Test thoroughly**
    ```bash
-   cd src
    uv sync
-   uv run python sgr_deep_research
+   uv run cli_stream.py chat
    # Test your changes
    ```
 5. **Submit a pull request**
 
 ### Areas for Contribution
 
-- 🧠 **New reasoning schemas** for specialized research domains
-- 🔍 **Additional search providers** (Google, Bing, etc.)
-- 🛠️ **Tool integrations** (databases, APIs, file systems)
-- 📊 **Enhanced reporting formats** (PDF, HTML, structured data)
-- 🔧 **Performance optimizations** and caching strategies
+- 🛠️ **New coding tools** (linters, formatters, test runners)
+- 🎨 **UI improvements** for the terminal interface
+- 📝 **Better prompts** for specific programming languages
+- 🔧 **IDE integrations** (VSCode, JetBrains, etc.)
+- 🌐 **Language support** for more programming languages
+- 📊 **Benchmarking** coding task performance
 
-______________________________________________________________________
+## 📝 License
 
-🧠 **Production-ready Schema-Guided Reasoning for automated research!**
+This project is open-source and available under the MIT License.
+
+## 🔗 Related Projects
+
+- [SGR Deep Research](https://github.com/vamplabAI/sgr-deep-research) - Research agent using SGR
+- [SGR Agent Demo](https://abdullin.com/schema-guided-reasoning/demo) - Original SGR concept demo
+
+---
+
+🦇 **Happy Coding with SGR Vampi Code!**
+
+*Intelligent coding assistance powered by Schema-Guided Reasoning*
