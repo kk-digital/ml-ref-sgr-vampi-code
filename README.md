@@ -70,6 +70,10 @@ uv run cli_stream.py chat --speed 0      # Instant
 
 # With debug logging
 uv run cli_stream.py chat --debug
+
+# Work on a specific project directory
+uv run cli_stream.py chat --workspace /path/to/project
+uv run cli_stream.py chat -w ../other-project
 ```
 
 ### Single Task Mode
@@ -78,6 +82,9 @@ Execute a single coding task:
 
 ```bash
 uv run cli_stream.py task "Analyze the project structure and list all Python files"
+
+# Work on a different directory
+uv run cli_stream.py task "Find all TODO comments" --workspace ~/my-project
 ```
 
 ### Fast Mode (No Typing Effect)
@@ -86,7 +93,30 @@ Get instant responses without the typing animation:
 
 ```bash
 uv run cli_stream.py fast "Create a new utility function for file parsing"
+
+# With custom workspace
+uv run cli_stream.py fast "Refactor main.py" -w /path/to/project
 ```
+
+### Workspace Parameter
+
+The `--workspace` (or `-w`) parameter allows you to specify which directory the agent should work in. This is useful when:
+- Running the agent from a different location than your project
+- Working on multiple projects without changing directories
+- Accessing projects in parent or sibling directories
+
+```bash
+# Relative path (from current directory)
+uv run cli_stream.py chat --workspace ../sgr-deep-research
+
+# Absolute path
+uv run cli_stream.py chat --workspace /home/user/projects/my-app
+
+# Current directory (default)
+uv run cli_stream.py chat --workspace .
+```
+
+All file operations (read, write, edit, grep, list, find) will be relative to the specified workspace directory.
 
 ## 🛠️ Available Tools
 
