@@ -1,5 +1,6 @@
 # 🦇 SGR Vampi Code - AI Coding Assistant with Schema-Guided Reasoning
 
+demo of reseach code cli agent 
 
 https://github.com/user-attachments/assets/8afd8caa-f084-4606-8ae0-b95f367a3c92
 
