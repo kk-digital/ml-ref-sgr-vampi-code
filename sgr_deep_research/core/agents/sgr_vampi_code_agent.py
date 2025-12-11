@@ -180,14 +180,19 @@ class SGRVampiCodeAgent(SGRResearchAgent):
             "tools": await self._prepare_tools(),
             "tool_choice": {"type": "function", "function": {"name": ReasoningTool.tool_name}},
             "extra_body": self._get_extra_body(),
+            "stream_options": {"include_usage": True},
         }
         
         async with self.openai_client.chat.completions.stream(**request_kwargs) as stream:
             async for event in stream:
                 if event.type == "chunk":
                     self.streaming_generator.add_chunk(event.chunk)
+            completion = await stream.get_final_completion()
+            # Track token usage
+            if completion.usage:
+                self.token_usage.add_usage(completion.usage)
             reasoning: ReasoningTool = (
-                (await stream.get_final_completion()).choices[0].message.tool_calls[0].function.parsed_arguments
+                completion.choices[0].message.tool_calls[0].function.parsed_arguments
             )
         
         self.conversation.append(
@@ -224,6 +229,7 @@ class SGRVampiCodeAgent(SGRResearchAgent):
                 "tools": await self._prepare_tools(),
                 "tool_choice": self.tool_choice,
                 "extra_body": self._get_extra_body(),
+                "stream_options": {"include_usage": True},
             }
             
             async with self.openai_client.chat.completions.stream(**request_kwargs) as stream:
@@ -232,6 +238,9 @@ class SGRVampiCodeAgent(SGRResearchAgent):
                         self.streaming_generator.add_chunk(event.chunk)
 
             completion = await stream.get_final_completion()
+            # Track token usage
+            if completion.usage:
+                self.token_usage.add_usage(completion.usage)
 
             try:
                 tool = completion.choices[0].message.tool_calls[0].function.parsed_arguments

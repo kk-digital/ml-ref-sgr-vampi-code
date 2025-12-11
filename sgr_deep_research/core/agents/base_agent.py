@@ -10,7 +10,7 @@ import httpx
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletionFunctionToolParam
 
-from sgr_deep_research.core.models import AgentStatesEnum, ResearchContext
+from sgr_deep_research.core.models import AgentStatesEnum, ResearchContext, TokenUsage
 from sgr_deep_research.core.prompts import PromptLoader
 from sgr_deep_research.core.stream import OpenAIStreamingGenerator
 from sgr_deep_research.core.tools import (
@@ -64,6 +64,9 @@ class BaseAgent:
 
         self.openai_client = AsyncOpenAI(**client_kwargs)
         self.streaming_generator = OpenAIStreamingGenerator(model=self.id)
+        
+        # Token usage tracking
+        self.token_usage = TokenUsage()
 
     def _get_extra_body(self) -> dict:
         """Get extra body parameters for OpenAI requests (e.g., tracking token).
@@ -199,5 +202,5 @@ class BaseAgent:
             traceback.print_exc()
         finally:
             if self.streaming_generator is not None:
-                self.streaming_generator.finish()
+                self.streaming_generator.finish(usage=self.token_usage.to_dict())
             self._save_agent_log()

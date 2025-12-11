@@ -84,8 +84,22 @@ class OpenAIStreamingGenerator(StreamingGenerator):
         }
         super().add(f"data: {json.dumps(response)}\n\n")
 
-    def finish(self, finish_reason: str = "stop"):
-        """Завершает stream с финальным chunk и usage."""
+    def finish(self, finish_reason: str = "stop", usage: dict | None = None):
+        """Завершает stream с финальным chunk и usage.
+        
+        Args:
+            finish_reason: Reason for finishing (e.g., 'stop', 'tool_calls')
+            usage: Token usage dictionary with prompt_tokens, completion_tokens, 
+                   total_tokens, and thinking_tokens
+        """
+        # Use provided usage or default to zeros
+        usage_data = usage or {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "thinking_tokens": 0,
+        }
+        
         final_response = {
             "id": self.id,
             "object": "chat.completion.chunk",
@@ -93,7 +107,7 @@ class OpenAIStreamingGenerator(StreamingGenerator):
             "model": self.model,
             "system_fingerprint": f"fp_{hex(hash(self.model))[-8:]}",
             "choices": [{"index": self.choice_index, "delta": {}, "logprobs": None, "finish_reason": finish_reason}],
-            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            "usage": usage_data,
         }
         super().add(f"data: {json.dumps(final_response)}\n\n")
         super().add("data: [DONE]\n\n")

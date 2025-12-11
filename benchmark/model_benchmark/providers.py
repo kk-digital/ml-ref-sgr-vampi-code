@@ -175,9 +175,9 @@ DEFAULT_MODELS = [
         output_price_per_million=0.50,
     ),
     ModelConfig(
-        name="google/gemini-3n",
+        name="google/gemini-3-pro-preview",
         provider=ProviderType.OPENROUTER,
-        display_name="Gemini 3n",
+        display_name="Gemini 3 Pro",
         input_price_per_million=1.25,
         output_price_per_million=10.0,
     ),

@@ -78,10 +78,10 @@ AVAILABLE_MODELS = {
         input_price_per_million=0.20,
         output_price_per_million=0.50,
     ),
-    "gemini-3n": ModelConfig(
-        name="google/gemini-3n",
+    "gemini-3-pro": ModelConfig(
+        name="google/gemini-3-pro-preview",
         provider=ProviderType.OPENROUTER,
-        display_name="Gemini 3n",
+        display_name="Gemini 3 Pro",
         input_price_per_million=1.25,
         output_price_per_million=10.0,
     ),
@@ -172,33 +172,43 @@ Available models:
 
 def print_summary(report, report_paths: dict):
     """Print detailed summary with per-model metrics and success/failure counts."""
-    print("\n" + "=" * 100)
+    print("\n" + "=" * 120)
     print("BENCHMARK COMPLETE")
-    print("=" * 100)
+    print("=" * 120)
     print(f"Total Duration: {report.total_duration_seconds:.2f}s")
     print(f"Total Cost: ${report.total_cost_usd:.6f}")
     print(f"Total Tasks: {report.total_tasks}")
     print(f"Models Tested: {len(report.model_reports)}")
     
     # Per-model summary table
-    print("\n" + "-" * 115)
-    print("PER-MODEL SUMMARY")
-    print("-" * 115)
+    print("\n## Per-Model Summary\n")
     
     # Header
     header = (
-        f"{'Model':<25} "
-        f"{'Success':>8} "
-        f"{'Failed':>8} "
-        f"{'Avg Time':>10} "
-        f"{'Avg Tokens':>12} "
-        f"{'Total Tokens':>13} "
-        f"{'Avg Think':>10} "
-        f"{'Avg Cost':>12} "
-        f"{'Total Cost':>12}"
+        f"| {'Model':<25} |"
+        f" {'Success':<8} |"
+        f" {'Failed':>6} |"
+        f" {'Avg Time':>10} |"
+        f" {'Avg Tokens':>10} |"
+        f" {'Avg Think':>10} |"
+        f" {'Total Tok':>10} |"
+        f" {'Avg Cost':>10} |"
+        f" {'Total Cost':>11} |"
     )
+    separator = (
+        f"|{'-'*27}|"
+        f"{'-'*10}|"
+        f"{'-'*8}|"
+        f"{'-'*12}|"
+        f"{'-'*12}|"
+        f"{'-'*12}|"
+        f"{'-'*12}|"
+        f"{'-'*12}|"
+        f"{'-'*13}|"
+    )
+    
     print(header)
-    print("-" * 115)
+    print(separator)
     
     # Per-model rows
     for model_report in report.model_reports.values():
@@ -206,28 +216,24 @@ def print_summary(report, report_paths: dict):
         failed = model_report.failed_tasks
         total = model_report.total_tasks
         
-        # Format success/failed with color indicators
-        if failed > 0:
-            status = f"{success}/{total}"
-            failed_str = f"{failed}"
-        else:
-            status = f"{success}/{total}"
-            failed_str = "0"
+        # Format success/failed
+        status = f"{success}/{total}"
+        failed_str = str(failed)
         
         row = (
-            f"{model_report.display_name:<25} "
-            f"{status:>8} "
-            f"{failed_str:>8} "
-            f"{model_report.avg_duration_seconds:>9.2f}s "
-            f"{model_report.avg_total_tokens:>12.0f} "
-            f"{model_report.total_tokens:>13} "
-            f"{model_report.avg_thinking_tokens:>10.0f} "
-            f"${model_report.avg_cost_usd:>11.6f} "
-            f"${model_report.total_cost_usd:>11.6f}"
+            f"| {model_report.display_name:<25} |"
+            f" {status:<8} |"
+            f" {failed_str:>6} |"
+            f" {model_report.avg_duration_seconds:>9.2f}s |"
+            f" {model_report.avg_total_tokens:>10.0f} |"
+            f" {model_report.avg_thinking_tokens:>10.0f} |"
+            f" {model_report.total_tokens:>10} |"
+            f" ${model_report.avg_cost_usd:>9.4f} |"
+            f" ${model_report.total_cost_usd:>10.4f} |"
         )
         print(row)
     
-    print("-" * 115)
+    print("\n" + "=" * 120)
     
     # Show failed models details if any
     failed_models = [m for m in report.model_reports.values() if m.failed_tasks > 0]

@@ -79,13 +79,18 @@ class SGRResearchAgent(BaseAgent):
             "max_tokens": config.openai.max_tokens,
             "temperature": config.openai.temperature,
             "extra_body": self._get_extra_body(),
+            "stream_options": {"include_usage": True},
         }
         
         async with self.openai_client.chat.completions.stream(**request_kwargs) as stream:
             async for event in stream:
                 if event.type == "chunk":
                     self.streaming_generator.add_chunk(event)
-        reasoning: NextStepToolStub = (await stream.get_final_completion()).choices[0].message.parsed  # type: ignore
+        completion = await stream.get_final_completion()
+        # Track token usage
+        if completion.usage:
+            self.token_usage.add_usage(completion.usage)
+        reasoning: NextStepToolStub = completion.choices[0].message.parsed  # type: ignore
         # we are not fully sure if it should be in conversation or not. Looks like not necessary data
         # self.conversation.append({"role": "assistant", "content": reasoning.model_dump_json(exclude={"function"})})
         self._log_reasoning(reasoning)

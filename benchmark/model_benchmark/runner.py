@@ -40,6 +40,19 @@ class BenchmarkRunner:
             tasks_directory=config.tasks_directory,
             models_tested=[m.name for m in config.models],
         )
+        self._http_client: Optional[httpx.AsyncClient] = None
+    
+    async def _get_http_client(self) -> httpx.AsyncClient:
+        """Get or create a shared HTTP client."""
+        if self._http_client is None:
+            self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(self.config.timeout_seconds))
+        return self._http_client
+    
+    async def _close_http_client(self):
+        """Close the shared HTTP client."""
+        if self._http_client is not None:
+            await self._http_client.aclose()
+            self._http_client = None
     
     def load_tasks(self) -> list[tuple[str, str]]:
         """Load tasks from .txt files in the tasks directory.
@@ -118,6 +131,7 @@ class BenchmarkRunner:
         
         response_content = ""
         iterations = 0
+        usage_data = None  # Will store actual token usage from final chunk
         
         # Get provider-specific base URL and API key
         llm_base_url = None
@@ -129,8 +143,8 @@ class BenchmarkRunner:
             llm_base_url = "https://api.cerebras.ai/v1"
             llm_api_key = os.getenv("CEREBRAS_API_KEY")
         
-        async with httpx.AsyncClient(timeout=httpx.Timeout(self.config.timeout_seconds)) as http_client:
-            async with http_client.stream(
+        http_client = await self._get_http_client()
+        async with http_client.stream(
                 "POST",
                 f"{SGR_API_BASE_URL}/v1/chat/completions",
                 json={
@@ -161,6 +175,9 @@ class BenchmarkRunner:
                                     response_content += delta["content"]
                                 if "tool_calls" in delta:
                                     iterations += 1
+                            # Capture usage data from final chunk (has finish_reason)
+                            if "usage" in chunk and chunk["usage"]:
+                                usage_data = chunk["usage"]
                         except json.JSONDecodeError:
                             pass
         
@@ -168,10 +185,19 @@ class BenchmarkRunner:
         result.success = True
         result.iterations = max(1, iterations)
         
-        # Estimate tokens (rough estimate for agent mode)
-        result.prompt_tokens = len(task_content.split()) * 2
-        result.completion_tokens = len(response_content.split()) * 2
-        result.total_tokens = result.prompt_tokens + result.completion_tokens
+        # Extract actual token usage from API response
+        if usage_data:
+            result.prompt_tokens = usage_data.get("prompt_tokens", 0) or 0
+            result.completion_tokens = usage_data.get("completion_tokens", 0) or 0
+            result.total_tokens = usage_data.get("total_tokens", 0) or 0
+            result.thinking_tokens = usage_data.get("thinking_tokens", 0) or 0
+        else:
+            # Fallback to estimation if no usage data available
+            result.prompt_tokens = len(task_content.split()) * 2
+            result.completion_tokens = len(response_content.split()) * 2
+            result.total_tokens = result.prompt_tokens + result.completion_tokens
+            result.thinking_tokens = 0
+            logger.warning(f"Task '{task_id}': No usage data received, using estimates")
         
         result.cost_usd = provider.calculate_cost(
             result.prompt_tokens,
@@ -181,7 +207,8 @@ class BenchmarkRunner:
         logger.info(
             f"Task '{task_id}' completed via agent: "
             f"iterations={result.iterations}, "
-            f"tokens~={result.total_tokens}"
+            f"tokens={result.total_tokens}, "
+            f"thinking_tokens={result.thinking_tokens}"
         )
         
         return result
@@ -191,7 +218,7 @@ class BenchmarkRunner:
         model_config: ModelConfig,
         tasks: list[tuple[str, str]],
     ) -> ModelReport:
-        """Run all tasks for a single model."""
+        """Run all tasks for a single model in parallel."""
         logger.info(f"Starting benchmark for model: {model_config.get_display_name()}")
         
         report = ModelReport(
@@ -208,24 +235,22 @@ class BenchmarkRunner:
             report.failed_tasks = len(tasks)
             return report
         
-        for i in range(0, len(tasks), self.config.batch_size):
-            batch = tasks[i:i + self.config.batch_size]
-            
-            batch_results = await asyncio.gather(*[
-                self.run_single_task(task_id, task_content, model_config, provider)
-                for task_id, task_content in batch
-            ], return_exceptions=True)
-            
-            for result in batch_results:
-                if isinstance(result, Exception):
-                    report.failed_tasks += 1
-                    logger.error(f"Unexpected error in batch: {result}")
+        # Run ALL tasks in parallel for this model
+        all_results = await asyncio.gather(*[
+            self.run_single_task(task_id, task_content, model_config, provider)
+            for task_id, task_content in tasks
+        ], return_exceptions=True)
+        
+        for result in all_results:
+            if isinstance(result, Exception):
+                report.failed_tasks += 1
+                logger.error(f"Unexpected error: {result}")
+            else:
+                report.task_results.append(result)
+                if result.success:
+                    report.successful_tasks += 1
                 else:
-                    report.task_results.append(result)
-                    if result.success:
-                        report.successful_tasks += 1
-                    else:
-                        report.failed_tasks += 1
+                    report.failed_tasks += 1
         
         successful_results = [r for r in report.task_results if r.success]
         if successful_results:
@@ -278,6 +303,9 @@ class BenchmarkRunner:
         self.report.total_cost_usd = sum(
             r.total_cost_usd for r in self.report.model_reports.values()
         )
+        
+        # Clean up HTTP client
+        await self._close_http_client()
         
         logger.info(
             f"Benchmark completed in {self.report.total_duration_seconds:.2f}s, "
