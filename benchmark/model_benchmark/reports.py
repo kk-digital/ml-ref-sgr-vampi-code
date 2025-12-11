@@ -95,17 +95,27 @@ class ReportGenerator:
             f"| {'Model':<25} |"
             f" {'Success':<8} |"
             f" {'Avg Time':>10} |"
-            f" {'Avg Tokens':>10} |"
+            f" {'Avg In':>8} |"
+            f" {'Avg Out':>8} |"
             f" {'Avg Think':>10} |"
+            f" {'Avg Total':>10} |"
+            f" {'Total In':>10} |"
+            f" {'Total Out':>10} |"
+            f" {'Total Think':>12} |"
             f" {'Total Tok':>10} |"
-            f" {'Avg Cost':>11} |"
+            f" {'Total Cost':>11} |"
         )
         separator = (
             f"|{'-'*27}|"
             f"{'-'*10}|"
             f"{'-'*12}|"
+            f"{'-'*10}|"
+            f"{'-'*10}|"
             f"{'-'*12}|"
             f"{'-'*12}|"
+            f"{'-'*12}|"
+            f"{'-'*12}|"
+            f"{'-'*14}|"
             f"{'-'*12}|"
             f"{'-'*13}|"
         )
@@ -118,10 +128,15 @@ class ReportGenerator:
                 f"| {model_report.display_name:<25} |"
                 f" {success_rate:<8} |"
                 f" {model_report.avg_duration_seconds:>9.2f}s |"
-                f" {model_report.avg_total_tokens:>10.0f} |"
+                f" {model_report.avg_prompt_tokens:>8.0f} |"
+                f" {model_report.avg_completion_tokens:>8.0f} |"
                 f" {model_report.avg_thinking_tokens:>10.0f} |"
+                f" {model_report.avg_total_tokens:>10.0f} |"
+                f" {model_report.total_prompt_tokens:>10} |"
+                f" {model_report.total_completion_tokens:>10} |"
+                f" {model_report.total_thinking_tokens:>12} |"
                 f" {model_report.total_tokens:>10} |"
-                f" ${model_report.avg_cost_usd:>10.6f} |"
+                f" ${model_report.total_cost_usd:>10.6f} |"
             )
             lines.append(row)
         
@@ -204,8 +219,8 @@ class ReportGenerator:
         
         lines.append("## Summary Comparison")
         lines.append("")
-        lines.append("| Model | Success | Avg Time | Avg Tokens | Avg Think | Total Tok | Avg Cost |")
-        lines.append("|-------|---------|----------|------------|-----------|-----------|----------|")
+        lines.append("| Model | Success | Avg Time | Avg In | Avg Out | Avg Think | Avg Total | Total In | Total Out | Total Think | Total Tok | Total Cost |")
+        lines.append("|-------|---------|----------|--------|---------|-----------|-----------|----------|-----------|-------------|-----------|------------|")
         
         for model_report in self.report.model_reports.values():
             success_rate = f"{model_report.successful_tasks}/{model_report.total_tasks}"
@@ -213,10 +228,15 @@ class ReportGenerator:
                 f"| {model_report.display_name} | "
                 f"{success_rate} | "
                 f"{model_report.avg_duration_seconds:.2f}s | "
-                f"{model_report.avg_total_tokens:.0f} | "
+                f"{model_report.avg_prompt_tokens:.0f} | "
+                f"{model_report.avg_completion_tokens:.0f} | "
                 f"{model_report.avg_thinking_tokens:.0f} | "
+                f"{model_report.avg_total_tokens:.0f} | "
+                f"{model_report.total_prompt_tokens} | "
+                f"{model_report.total_completion_tokens} | "
+                f"{model_report.total_thinking_tokens} | "
                 f"{model_report.total_tokens} | "
-                f"${model_report.avg_cost_usd:.6f} |"
+                f"${model_report.total_cost_usd:.6f} |"
             )
         
         lines.append("")

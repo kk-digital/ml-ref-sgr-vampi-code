@@ -178,6 +178,7 @@ class BenchmarkRunner:
                             # Capture usage data from final chunk (has finish_reason)
                             if "usage" in chunk and chunk["usage"]:
                                 usage_data = chunk["usage"]
+                                logger.debug(f"Task '{task_id}': Captured usage from chunk: {usage_data}")
                         except json.JSONDecodeError:
                             pass
         
@@ -185,24 +186,80 @@ class BenchmarkRunner:
         result.success = True
         result.iterations = max(1, iterations)
         
-        # Extract actual token usage from API response
+        # Extract actual token usage and cost from API response
+        logger.debug(f"Task '{task_id}': Raw usage_data from API: {usage_data}")
         if usage_data:
             result.prompt_tokens = usage_data.get("prompt_tokens", 0) or 0
             result.completion_tokens = usage_data.get("completion_tokens", 0) or 0
-            result.total_tokens = usage_data.get("total_tokens", 0) or 0
-            result.thinking_tokens = usage_data.get("thinking_tokens", 0) or 0
+            
+            # Extract thinking/reasoning tokens - check multiple locations
+            # 1. Direct field (from our agent's TokenUsage.to_dict())
+            thinking = usage_data.get("thinking_tokens", 0) or 0
+            # 2. OpenRouter/OpenAI format: completion_tokens_details.reasoning_tokens
+            if thinking == 0:
+                details = usage_data.get("completion_tokens_details", {})
+                if details:
+                    thinking = details.get("reasoning_tokens", 0) or 0
+            result.thinking_tokens = thinking
+            
+            # Calculate total tokens: prompt + completion + thinking
+            # Note: Some APIs include thinking in completion_tokens, others don't
+            # We ensure total includes all token types
+            api_total = usage_data.get("total_tokens", 0) or 0
+            calculated_total = result.prompt_tokens + result.completion_tokens
+            # If API total doesn't include thinking tokens, add them
+            if api_total > 0 and result.thinking_tokens > 0:
+                # Check if thinking tokens are already included in total
+                if api_total < calculated_total + result.thinking_tokens:
+                    result.total_tokens = api_total + result.thinking_tokens
+                else:
+                    result.total_tokens = api_total
+            elif api_total > 0:
+                result.total_tokens = api_total
+            else:
+                result.total_tokens = calculated_total + result.thinking_tokens
+            
+            # Use cost from API if available (OpenRouter provides this)
+            api_cost = usage_data.get("cost")
+            if api_cost is not None:
+                result.cost_usd = float(api_cost)
+                logger.info(f"Task '{task_id}': Using API-provided cost: ${api_cost}")
+            else:
+                # Fallback to calculated cost if API doesn't provide it
+                result.cost_usd = provider.calculate_cost(
+                    result.prompt_tokens,
+                    result.completion_tokens + result.thinking_tokens  # Include thinking in cost calc
+                )
+                logger.warning(f"Task '{task_id}': No cost in API response, using calculated: ${result.cost_usd:.6f}")
+            
+            # Extract cached tokens if available
+            cached = usage_data.get("cached_tokens", 0) or 0
+            if cached == 0:
+                prompt_details = usage_data.get("prompt_tokens_details", {})
+                if prompt_details:
+                    cached = prompt_details.get("cached_tokens", 0) or 0
+            
+            logger.info(
+                f"Task '{task_id}': Token usage - prompt={result.prompt_tokens}, "
+                f"completion={result.completion_tokens}, thinking={result.thinking_tokens}, "
+                f"cached={cached}, total={result.total_tokens}, cost=${result.cost_usd:.6f}"
+            )
         else:
             # Fallback to estimation if no usage data available
-            result.prompt_tokens = len(task_content.split()) * 2
-            result.completion_tokens = len(response_content.split()) * 2
+            # Use tiktoken-style estimation: ~4 chars per token for English text
+            result.prompt_tokens = max(1, len(task_content) // 4)
+            result.completion_tokens = max(1, len(response_content) // 4)
             result.total_tokens = result.prompt_tokens + result.completion_tokens
             result.thinking_tokens = 0
-            logger.warning(f"Task '{task_id}': No usage data received, using estimates")
-        
-        result.cost_usd = provider.calculate_cost(
-            result.prompt_tokens,
-            result.completion_tokens
-        )
+            result.cost_usd = provider.calculate_cost(
+                result.prompt_tokens,
+                result.completion_tokens
+            )
+            logger.warning(
+                f"Task '{task_id}': No usage data received from API, using estimates. "
+                f"Provider: {model_config.provider.value}, Model: {model_config.name}. "
+                f"Estimated tokens: prompt={result.prompt_tokens}, completion={result.completion_tokens}"
+            )
         
         logger.info(
             f"Task '{task_id}' completed via agent: "

@@ -187,22 +187,28 @@ def print_summary(report, report_paths: dict):
     header = (
         f"| {'Model':<25} |"
         f" {'Success':<8} |"
-        f" {'Failed':>6} |"
         f" {'Avg Time':>10} |"
-        f" {'Avg Tokens':>10} |"
+        f" {'Avg In':>8} |"
+        f" {'Avg Out':>8} |"
         f" {'Avg Think':>10} |"
+        f" {'Avg Total':>10} |"
+        f" {'Total In':>10} |"
+        f" {'Total Out':>10} |"
+        f" {'Total Think':>12} |"
         f" {'Total Tok':>10} |"
-        f" {'Avg Cost':>10} |"
         f" {'Total Cost':>11} |"
     )
     separator = (
         f"|{'-'*27}|"
         f"{'-'*10}|"
-        f"{'-'*8}|"
+        f"{'-'*12}|"
+        f"{'-'*10}|"
+        f"{'-'*10}|"
         f"{'-'*12}|"
         f"{'-'*12}|"
         f"{'-'*12}|"
         f"{'-'*12}|"
+        f"{'-'*14}|"
         f"{'-'*12}|"
         f"{'-'*13}|"
     )
@@ -213,22 +219,23 @@ def print_summary(report, report_paths: dict):
     # Per-model rows
     for model_report in report.model_reports.values():
         success = model_report.successful_tasks
-        failed = model_report.failed_tasks
         total = model_report.total_tasks
         
-        # Format success/failed
+        # Format success
         status = f"{success}/{total}"
-        failed_str = str(failed)
         
         row = (
             f"| {model_report.display_name:<25} |"
             f" {status:<8} |"
-            f" {failed_str:>6} |"
             f" {model_report.avg_duration_seconds:>9.2f}s |"
-            f" {model_report.avg_total_tokens:>10.0f} |"
+            f" {model_report.avg_prompt_tokens:>8.0f} |"
+            f" {model_report.avg_completion_tokens:>8.0f} |"
             f" {model_report.avg_thinking_tokens:>10.0f} |"
+            f" {model_report.avg_total_tokens:>10.0f} |"
+            f" {model_report.total_prompt_tokens:>10} |"
+            f" {model_report.total_completion_tokens:>10} |"
+            f" {model_report.total_thinking_tokens:>12} |"
             f" {model_report.total_tokens:>10} |"
-            f" ${model_report.avg_cost_usd:>9.4f} |"
             f" ${model_report.total_cost_usd:>10.4f} |"
         )
         print(row)

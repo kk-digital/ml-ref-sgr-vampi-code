@@ -79,17 +79,30 @@ class SGRResearchAgent(BaseAgent):
             "max_tokens": config.openai.max_tokens,
             "temperature": config.openai.temperature,
             "extra_body": self._get_extra_body(),
-            "stream_options": {"include_usage": True},
         }
         
+        # Add stream_options only for providers that support it
+        stream_options = self._get_stream_options()
+        if stream_options:
+            request_kwargs["stream_options"] = stream_options
+        
+        last_chunk_usage = None  # Capture usage from final chunk (for Cerebras)
         async with self.openai_client.chat.completions.stream(**request_kwargs) as stream:
             async for event in stream:
                 if event.type == "chunk":
                     self.streaming_generator.add_chunk(event)
+                    # Cerebras returns usage in final chunk - check multiple ways
+                    chunk = event.chunk if hasattr(event, 'chunk') else event
+                    if hasattr(chunk, 'usage') and chunk.usage:
+                        last_chunk_usage = chunk.usage
+                    elif hasattr(chunk, 'model_extra') and chunk.model_extra.get('usage'):
+                        last_chunk_usage = chunk.model_extra['usage']
         completion = await stream.get_final_completion()
-        # Track token usage
+        # Track token usage - prefer completion.usage, fallback to last chunk
         if completion.usage:
             self.token_usage.add_usage(completion.usage)
+        elif last_chunk_usage:
+            self.token_usage.add_usage(last_chunk_usage)
         reasoning: NextStepToolStub = completion.choices[0].message.parsed  # type: ignore
         # we are not fully sure if it should be in conversation or not. Looks like not necessary data
         # self.conversation.append({"role": "assistant", "content": reasoning.model_dump_json(exclude={"function"})})

@@ -1,5 +1,6 @@
 
 
+import copy
 from typing import Literal, Type
 
 from openai import pydantic_function_tool
@@ -157,6 +158,25 @@ class SGRVampiCodeAgent(SGRResearchAgent):
             self.logger.warning(f"Failed to load code_system_prompt.txt: {e}, using default")
             return PromptLoader.get_system_prompt(self.toolkit)
 
+    def _strip_unsupported_schema_fields(self, schema: dict) -> dict:
+        """Strip JSON schema fields not supported by Cerebras.
+        
+        Cerebras rejects schemas with minItems, maxItems, and other 
+        'informational' fields. This recursively removes them.
+        """
+        unsupported_fields = {"minItems", "maxItems", "minLength", "maxLength", 
+                             "minimum", "maximum", "pattern", "format"}
+        
+        def strip_recursive(obj):
+            if isinstance(obj, dict):
+                return {k: strip_recursive(v) for k, v in obj.items() 
+                        if k not in unsupported_fields}
+            elif isinstance(obj, list):
+                return [strip_recursive(item) for item in obj]
+            return obj
+        
+        return strip_recursive(schema)
+    
     async def _prepare_tools(self) -> list[ChatCompletionFunctionToolParam]:
         """Prepare available tools for current agent state and progress."""
         tools = set(self.toolkit)
@@ -168,7 +188,17 @@ class SGRVampiCodeAgent(SGRResearchAgent):
                 FinalAnswerTool,
             }
         
-        return [pydantic_function_tool(tool, name=tool.tool_name, description="") for tool in tools]
+        tool_params = [pydantic_function_tool(tool, name=tool.tool_name, description="") for tool in tools]
+        
+        # For Cerebras, strip unsupported schema fields
+        if self._provider_type == "cerebras":
+            for tool_param in tool_params:
+                if "function" in tool_param and "parameters" in tool_param["function"]:
+                    tool_param["function"]["parameters"] = self._strip_unsupported_schema_fields(
+                        tool_param["function"]["parameters"]
+                    )
+        
+        return tool_params
 
     async def _reasoning_phase(self) -> ReasoningTool:
         """Reasoning phase with streaming support."""
@@ -180,17 +210,31 @@ class SGRVampiCodeAgent(SGRResearchAgent):
             "tools": await self._prepare_tools(),
             "tool_choice": {"type": "function", "function": {"name": ReasoningTool.tool_name}},
             "extra_body": self._get_extra_body(),
-            "stream_options": {"include_usage": True},
         }
         
+        # Add stream_options only for providers that support it
+        stream_options = self._get_stream_options()
+        if stream_options:
+            request_kwargs["stream_options"] = stream_options
+        
+        last_chunk_usage = None  # Capture usage from final chunk (for Cerebras)
         async with self.openai_client.chat.completions.stream(**request_kwargs) as stream:
             async for event in stream:
                 if event.type == "chunk":
                     self.streaming_generator.add_chunk(event.chunk)
+                    # Cerebras returns usage in final chunk - check multiple ways
+                    chunk = event.chunk
+                    if hasattr(chunk, 'usage') and chunk.usage:
+                        last_chunk_usage = chunk.usage
+                    # Also check model_extra for non-standard fields
+                    elif hasattr(chunk, 'model_extra') and chunk.model_extra.get('usage'):
+                        last_chunk_usage = chunk.model_extra['usage']
             completion = await stream.get_final_completion()
-            # Track token usage
+            # Track token usage - prefer completion.usage, fallback to last chunk
             if completion.usage:
                 self.token_usage.add_usage(completion.usage)
+            elif last_chunk_usage:
+                self.token_usage.add_usage(last_chunk_usage)
             reasoning: ReasoningTool = (
                 completion.choices[0].message.tool_calls[0].function.parsed_arguments
             )
@@ -229,18 +273,31 @@ class SGRVampiCodeAgent(SGRResearchAgent):
                 "tools": await self._prepare_tools(),
                 "tool_choice": self.tool_choice,
                 "extra_body": self._get_extra_body(),
-                "stream_options": {"include_usage": True},
             }
             
+            # Add stream_options only for providers that support it
+            stream_options = self._get_stream_options()
+            if stream_options:
+                request_kwargs["stream_options"] = stream_options
+            
+            last_chunk_usage = None  # Capture usage from final chunk (for Cerebras)
             async with self.openai_client.chat.completions.stream(**request_kwargs) as stream:
                 async for event in stream:
                     if event.type == "chunk":
                         self.streaming_generator.add_chunk(event.chunk)
+                        # Cerebras returns usage in final chunk - check multiple ways
+                        chunk = event.chunk
+                        if hasattr(chunk, 'usage') and chunk.usage:
+                            last_chunk_usage = chunk.usage
+                        elif hasattr(chunk, 'model_extra') and chunk.model_extra.get('usage'):
+                            last_chunk_usage = chunk.model_extra['usage']
 
             completion = await stream.get_final_completion()
-            # Track token usage
+            # Track token usage - prefer completion.usage, fallback to last chunk
             if completion.usage:
                 self.token_usage.add_usage(completion.usage)
+            elif last_chunk_usage:
+                self.token_usage.add_usage(last_chunk_usage)
 
             try:
                 tool = completion.choices[0].message.tool_calls[0].function.parsed_arguments

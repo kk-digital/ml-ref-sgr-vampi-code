@@ -1,9 +1,12 @@
 import asyncio
+import logging
 from datetime import datetime
 from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+_token_usage_logger = logging.getLogger(__name__)
 
 
 class SourceData(BaseModel):
@@ -76,15 +79,25 @@ class TokenUsage(BaseModel):
     completion_tokens: int = Field(default=0, description="Total output/completion tokens")
     total_tokens: int = Field(default=0, description="Total tokens used")
     thinking_tokens: int = Field(default=0, description="Thinking/reasoning tokens (if available)")
+    cached_tokens: int = Field(default=0, description="Cached prompt tokens (if available)")
+    cost: float = Field(default=0.0, description="Total cost in USD from API")
     
     def add_usage(self, usage) -> None:
         """Add usage from an OpenAI response.
         
         Args:
-            usage: OpenAI CompletionUsage object or dict with token counts
+            usage: OpenAI CompletionUsage object or dict with token counts and cost
         """
         if usage is None:
             return
+        
+        # Debug: Log raw usage object to understand what we're receiving
+        _token_usage_logger.debug(f"Raw usage object type: {type(usage)}")
+        _token_usage_logger.debug(f"Raw usage object: {usage}")
+        if hasattr(usage, '__dict__'):
+            _token_usage_logger.debug(f"Usage __dict__: {usage.__dict__}")
+        if hasattr(usage, 'model_extra'):
+            _token_usage_logger.debug(f"Usage model_extra: {usage.model_extra}")
         
         if hasattr(usage, 'prompt_tokens'):
             self.prompt_tokens += getattr(usage, 'prompt_tokens', 0) or 0
@@ -96,19 +109,77 @@ class TokenUsage(BaseModel):
                 details = usage.completion_tokens_details
                 if hasattr(details, 'reasoning_tokens'):
                     self.thinking_tokens += details.reasoning_tokens or 0
+            
+            # Extract cached tokens from prompt_tokens_details (OpenRouter format)
+            if hasattr(usage, 'prompt_tokens_details') and usage.prompt_tokens_details:
+                prompt_details = usage.prompt_tokens_details
+                if hasattr(prompt_details, 'cached_tokens'):
+                    self.cached_tokens += prompt_details.cached_tokens or 0
+            
+            # Extract cost from API response (OpenRouter provides this as extra field)
+            # Try direct attribute first
+            cost_val = getattr(usage, 'cost', None)
+            # If not found, try model_extra (Pydantic models store extra fields here)
+            if cost_val is None and hasattr(usage, 'model_extra'):
+                cost_val = usage.model_extra.get('cost')
+            # Also try __dict__ for non-Pydantic objects
+            if cost_val is None and hasattr(usage, '__dict__'):
+                cost_val = usage.__dict__.get('cost')
+            
+            _token_usage_logger.debug(f"Extracted cost_val: {cost_val}")
+            if cost_val is not None:
+                self.cost += float(cost_val)
+                _token_usage_logger.info(f"API cost extracted: ${cost_val}")
+            else:
+                _token_usage_logger.warning("No cost found in API response - will use fallback calculation")
         elif isinstance(usage, dict):
             self.prompt_tokens += usage.get('prompt_tokens', 0) or 0
             self.completion_tokens += usage.get('completion_tokens', 0) or 0
             self.total_tokens += usage.get('total_tokens', 0) or 0
             self.thinking_tokens += usage.get('thinking_tokens', 0) or 0
+            self.cached_tokens += usage.get('cached_tokens', 0) or 0
+            # Also check nested details format
+            completion_details = usage.get('completion_tokens_details', {})
+            if completion_details:
+                self.thinking_tokens += completion_details.get('reasoning_tokens', 0) or 0
+            prompt_details = usage.get('prompt_tokens_details', {})
+            if prompt_details:
+                self.cached_tokens += prompt_details.get('cached_tokens', 0) or 0
+            # Extract cost from dict (OpenRouter provides this)
+            cost_val = usage.get('cost')
+            _token_usage_logger.debug(f"Dict cost_val: {cost_val}")
+            if cost_val is not None:
+                self.cost += float(cost_val)
+                _token_usage_logger.info(f"API cost extracted from dict: ${cost_val}")
     
     def to_dict(self) -> dict:
-        """Return usage as dictionary."""
+        """Return usage as dictionary.
+        
+        Ensures total_tokens includes thinking_tokens if they're not already counted.
+        Some providers include thinking tokens in total, others don't.
+        """
+        # Calculate what total should be: prompt + completion
+        calculated_total = self.prompt_tokens + self.completion_tokens
+        
+        # If API total matches calculated, thinking tokens might not be included
+        # If thinking tokens exist and total doesn't seem to include them, add them
+        final_total = self.total_tokens
+        if self.thinking_tokens > 0:
+            # Check if thinking tokens are already included in total
+            # If total equals prompt + completion, thinking is NOT included
+            if self.total_tokens == calculated_total:
+                final_total = self.total_tokens + self.thinking_tokens
+            # If total is less than calculated + thinking, it's likely not included
+            elif self.total_tokens < calculated_total + self.thinking_tokens:
+                final_total = calculated_total + self.thinking_tokens
+        
         return {
             "prompt_tokens": self.prompt_tokens,
             "completion_tokens": self.completion_tokens,
-            "total_tokens": self.total_tokens,
+            "total_tokens": final_total,
             "thinking_tokens": self.thinking_tokens,
+            "cached_tokens": self.cached_tokens,
+            "cost": self.cost,
         }
 
 
