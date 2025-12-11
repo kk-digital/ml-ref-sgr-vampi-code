@@ -1,0 +1,10 @@
+Write a Python class called `WeatherAPIClient` that fetches weather data from a REST API. The class should:
+
+1. Accept an API base URL and optional API key in the constructor
+2. Have an async method `get_current_weather(city: str)` that returns weather data
+3. Have an async method `get_forecast(city: str, days: int)` that returns a forecast
+4. Include proper error handling for network errors and invalid responses
+5. Use type hints throughout
+6. Include retry logic with exponential backoff (max 3 retries)
+
+Use the `httpx` library for async HTTP requests.

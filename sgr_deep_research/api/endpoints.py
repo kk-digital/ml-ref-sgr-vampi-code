@@ -135,7 +135,13 @@ async def create_chat_completion(request: ChatCompletionRequest):
             )
 
         agent_class = AGENT_MODEL_MAPPING[agent_model]
-        agent = agent_class(task=task, tracking_token=request.tracking_token)
+        agent = agent_class(
+            task=task,
+            tracking_token=request.tracking_token,
+            llm_model=request.llm_model,
+            llm_base_url=request.llm_base_url,
+            llm_api_key=request.llm_api_key,
+        )
         agents_storage[agent.id] = agent
         logger.info(
             f"Agent {agent.id} ({agent_model.value}) created and stored for task: {task[:100]}... "

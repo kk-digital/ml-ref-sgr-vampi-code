@@ -394,6 +394,45 @@ We welcome contributions from the community! Here's how you can help:
 
 This project is open-source and available under the MIT License.
 
+## 🤖 Available Models (Benchmark)
+
+The model benchmark module supports the following LLM providers and models:
+
+### OpenRouter Models
+
+| Alias | Model ID | Display Name | Input $/1M | Output $/1M |
+|-------|----------|--------------|------------|-------------|
+| `claude-opus-4.5` | `anthropic/claude-opus-4.5` | Claude Opus 4.5 | $15.00 | $75.00 |
+| `claude-sonnet-4.5` | `anthropic/claude-sonnet-4.5` | Claude Sonnet 4.5 | $3.00 | $15.00 |
+| `gpt-5.1` | `openai/gpt-5.1` | GPT-5.1 | $2.50 | $10.00 |
+| `gemini-3n` | `google/gemini-3n` | Gemini 3n | $1.25 | $10.00 |
+| `glm-4.6` | `z-ai/glm-4.6` | GLM 4.6 | $0.30 | $0.90 |
+| `grok-4.1-fast` | `x-ai/grok-4.1-fast` | Grok 4.1 Fast | $0.20 | $0.50 |
+
+### Cerebras Models
+
+| Alias | Model ID | Display Name | Input $/1M | Output $/1M |
+|-------|----------|--------------|------------|-------------|
+| `cerebras-glm-4.6` | `zai-glm-4.6` | GLM 4.6 (Cerebras) | Free | Free |
+
+### Usage
+
+```bash
+# List all available models
+python -m benchmark.model_benchmark.run_model_benchmark --list-models
+
+# Run with specific models
+python -m benchmark.model_benchmark.run_model_benchmark --tasks-dir ./tasks --models claude-sonnet-4.5 gpt-5.1
+
+# Run with all models
+python -m benchmark.model_benchmark.run_model_benchmark --tasks-dir ./tasks
+```
+
+### Required Environment Variables
+
+- `OPENROUTER_API_KEY` - For OpenRouter models
+- `CEREBRAS_API_KEY` - For Cerebras models
+
 ## 🔗 Related Projects
 
 - [SGR Deep Research](https://github.com/vamplabAI/sgr-deep-research) - Research agent using SGR

@@ -1,0 +1,15 @@
+Find and fix the bug in this code that causes an infinite loop:
+
+```python
+def find_duplicates(items):
+    duplicates = []
+    i = 0
+    while i < len(items):
+        j = i + 1
+        while j < len(items):
+            if items[i] == items[j]:
+                duplicates.append(items[i])
+        j += 1
+    i += 1
+    return duplicates
+```

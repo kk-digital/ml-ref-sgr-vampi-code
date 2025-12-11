@@ -32,6 +32,9 @@ class SGRResearchAgent(BaseAgent):
         max_searches: int = 4,
         tracking_token: str | None = None,
         working_directory: str = ".",
+        llm_model: str | None = None,
+        llm_base_url: str | None = None,
+        llm_api_key: str | None = None,
     ):
         super().__init__(
             task=task,
@@ -40,6 +43,9 @@ class SGRResearchAgent(BaseAgent):
             max_iterations=max_iterations,
             tracking_token=tracking_token,
             working_directory=working_directory,
+            llm_model=llm_model,
+            llm_base_url=llm_base_url,
+            llm_api_key=llm_api_key,
         )
 
         self.toolkit = [
@@ -67,7 +73,7 @@ class SGRResearchAgent(BaseAgent):
 
     async def _reasoning_phase(self) -> NextStepToolStub:
         request_kwargs = {
-            "model": config.openai.model,
+            "model": self.llm_model,
             "response_format": await self._prepare_tools(),
             "messages": await self._prepare_context(),
             "max_tokens": config.openai.max_tokens,

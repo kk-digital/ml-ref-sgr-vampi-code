@@ -37,6 +37,9 @@ class BaseAgent:
         max_clarifications: int = 3,
         tracking_token: str | None = None,
         working_directory: str = ".",
+        llm_model: str | None = None,
+        llm_base_url: str | None = None,
+        llm_api_key: str | None = None,
     ):
         self.id = f"{self.name}_{uuid.uuid4()}"
         self.logger = logging.getLogger(f"sgr_deep_research.agents.{self.id}")
@@ -49,8 +52,13 @@ class BaseAgent:
         self.log = []
         self.max_iterations = max_iterations
         self.max_clarifications = max_clarifications
+        
+        # Dynamic LLM configuration (for benchmarking different models)
+        self.llm_model = llm_model or config.openai.model
+        self.llm_base_url = llm_base_url or config.openai.base_url
+        self.llm_api_key = llm_api_key or config.openai.api_key
 
-        client_kwargs = {"base_url": config.openai.base_url, "api_key": config.openai.api_key}
+        client_kwargs = {"base_url": self.llm_base_url, "api_key": self.llm_api_key}
         if config.openai.proxy.strip():
             client_kwargs["http_client"] = httpx.AsyncClient(proxy=config.openai.proxy)
 

@@ -41,6 +41,9 @@ class SGRVampiCodeAgent(SGRResearchAgent):
         max_conversation_messages: int = 80,
         tracking_token: str | None = None,
         working_directory: str = ".",
+        llm_model: str | None = None,
+        llm_base_url: str | None = None,
+        llm_api_key: str | None = None,
     ):
         super().__init__(
             task=task,
@@ -50,6 +53,9 @@ class SGRVampiCodeAgent(SGRResearchAgent):
             max_searches=0,  # No web searches for coding agent
             tracking_token=tracking_token,
             working_directory=working_directory,
+            llm_model=llm_model,
+            llm_base_url=llm_base_url,
+            llm_api_key=llm_api_key,
         )
         self.toolkit = [
             *system_agent_tools,
@@ -167,7 +173,7 @@ class SGRVampiCodeAgent(SGRResearchAgent):
     async def _reasoning_phase(self) -> ReasoningTool:
         """Reasoning phase with streaming support."""
         request_kwargs = {
-            "model": config.openai.model,
+            "model": self.llm_model,
             "messages": await self._prepare_context(),
             "max_tokens": config.openai.max_tokens,
             "temperature": config.openai.temperature,
@@ -211,7 +217,7 @@ class SGRVampiCodeAgent(SGRResearchAgent):
         """Select and execute action tool."""
         try:
             request_kwargs = {
-                "model": config.openai.model,
+                "model": self.llm_model,
                 "messages": await self._prepare_context(),
                 "max_tokens": config.openai.max_tokens,
                 "temperature": config.openai.temperature,
