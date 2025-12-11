@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from datetime import date
+from datetime import date, datetime
 from typing import List, Optional
-from pydantic import ValidationError
+import re
 
 class Address(BaseModel):
     street: str
@@ -21,18 +21,19 @@ class Person(BaseModel):
     @field_validator('phone')
     @classmethod
     def validate_phone(cls, v):
-        if v is not None:
-            import re
-            if not re.match(r'^\\+?1?\\d{9,15}$', v):
-                raise ValueError('Phone number must be a valid format (e.g., +1234567890)')
+        if v is None:
+            return v
+        pattern = r'^\+?\d[\d\s\-\(\)]{9,16}$'
+        if not re.match(pattern, v):
+            raise ValueError('Phone number must be a valid format (10-15 digits with optional + and separators)')
         return v
 
     @field_validator('date_of_birth')
     @classmethod
-    def check_age(cls, v):
+    def check_min_age(cls, v):
         today = date.today()
-        age_days = (today - v).days
-        if age_days < 18 * 365.25:
+        age = today.year - v.year - ((today.month, today.day) < (v.month, v.day))
+        if age < 18:
             raise ValueError('Person must be at least 18 years old')
         return v
 
@@ -41,21 +42,18 @@ class Order(BaseModel):
     customer: Person
     items: List[str]
     total_amount: float = Field(gt=0)
-    created_at: date
+    created_at: datetime
 
     @field_validator('order_id')
     @classmethod
     def validate_order_id(cls, v):
-        import re
         if not re.match(r'^ORD-\\d{5}$', v):
-            raise ValueError('order_id must follow the pattern ORD-XXXXX where X is a digit')
+            raise ValueError('order_id must follow the pattern "ORD-XXXXX" where X are digits')
         return v
 
+# Example usage demonstrating validation success and failure cases
 if __name__ == "__main__":
-    print("=== Example Usage ===")
-    
-    # Success case
-    print("\n1. Success Case:")
+    print("=== SUCCESS CASE ===")
     valid_address = Address(
         street="123 Main St",
         city="New York",
@@ -67,73 +65,80 @@ if __name__ == "__main__":
         first_name="John",
         last_name="Doe",
         email="john.doe@example.com",
-        phone="+1-234-567-8900",
-        date_of_birth=date(1990, 1, 1),
+        phone="+1-555-123-4567",
+        date_of_birth=date(1990, 5, 15),  # Over 18
         address=valid_address
     )
     valid_order = Order(
         order_id="ORD-12345",
         customer=valid_person,
         items=["Laptop", "Mouse"],
-        total_amount=1299.99,
-        created_at=date.today()
+        total_amount=1250.75,
+        created_at=datetime.now()
     )
-    print("✅ Valid Order:", valid_order.model_dump_json(indent=2))
+    print("Valid Order:", valid_order.model_dump_json(indent=2))
+
+    print("\n=== FAILURE CASES ===")
     
-    # Failure cases
-    print("\n2. Invalid order_id:")
+    # Invalid email
     try:
-        invalid_order1 = Order(
-            order_id="ORD-ABC12",
+        invalid_email_person = Person(
+            first_name="Jane",
+            last_name="Doe",
+            email="invalid-email",
+            phone="+1-555-123-4567",
+            date_of_birth=date(1990, 5, 15),
+            address=valid_address
+        )
+    except Exception as e:
+        print("1. Invalid email:", str(e))
+
+    # Invalid phone
+    try:
+        invalid_phone_person = Person(
+            first_name="Bob",
+            last_name="Smith",
+            email="bob.smith@example.com",
+            phone="invalid_phone",
+            date_of_birth=date(1990, 5, 15),
+            address=valid_address
+        )
+    except Exception as e:
+        print("2. Invalid phone:", str(e))
+
+    # Underage
+    try:
+        underage_person = Person(
+            first_name="Kid",
+            last_name="Doe",
+            email="kid@example.com",
+            phone=None,
+            date_of_birth=date(2010, 1, 1),  # Under 18
+            address=valid_address
+        )
+    except Exception as e:
+        print("3. Underage:", str(e))
+
+    # Invalid order_id
+    try:
+        invalid_order = Order(
+            order_id="INVALID-123",
             customer=valid_person,
             items=["Item"],
             total_amount=100.0,
-            created_at=date.today()
+            created_at=datetime.now()
         )
-    except ValidationError as e:
-        print("❌ Caught ValidationError:", str(e.errors()[0]))
-    
-    print("\n3. Invalid total_amount (negative):")
+    except Exception as e:
+        print("4. Invalid order_id:", str(e))
+
+    # Negative total
     try:
-        invalid_order2 = Order(
-            order_id="ORD-12345",
+        negative_order = Order(
+            order_id="ORD-67890",
             customer=valid_person,
             items=["Item"],
             total_amount=-50.0,
-            created_at=date.today()
+            created_at=datetime.now()
         )
-    except ValidationError as e:
-        print("❌ Caught ValidationError:", str(e.errors()[0]))
-    
-    print("\n4. Invalid email in person:")
-    invalid_person = Person(
-        first_name="Jane",
-        last_name="Doe",
-        email="invalid-email",
-        phone="1234567890",
-        date_of_birth=date(2008, 1, 1),  # Under 18 in 2025
-        address=valid_address
-    )
-    try:
-        invalid_order3 = Order(
-            order_id="ORD-54321",
-            customer=invalid_person,
-            items=["Item"],
-            total_amount=100.0,
-            created_at=date.today()
-        )
-    except ValidationError as e:
-        print("❌ Caught ValidationError (multiple):", [err['message'] for err in e.errors()])
-    
-    print("\n5. Invalid phone:")
-    try:
-        person_with_bad_phone = Person(
-            first_name="Bob",
-            last_name="Smith",
-            email="bob@example.com",
-            phone="invalid",
-            date_of_birth=date(1980, 1, 1),
-            address=valid_address
-        )
-    except ValidationError as e:
-        print("❌ Invalid phone caught:", str(e.errors()[0]))
+    except Exception as e:
+        print("5. Negative total_amount:", str(e))

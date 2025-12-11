@@ -1,14 +1,14 @@
 """
 Weather API Client with async support, retry logic, and error handling.
 
-This module provides a WeatherAPIClient class for fetching weather data from REST APIs
-with exponential backoff retry logic and comprehensive error handling.
+This module provides a WeatherAPIClient class for fetching weather data
+from REST APIs with built-in retry logic and exponential backoff.
 """
 
 import asyncio
 from typing import Any, Dict, Optional
 import httpx
-from enum import Enum
+from datetime import datetime
 
 
 class WeatherAPIError(Exception):
@@ -26,26 +26,21 @@ class InvalidResponseError(WeatherAPIError):
     pass
 
 
-class APIKeyError(WeatherAPIError):
-    """Raised when API key is invalid or missing."""
-    pass
-
-
 class WeatherAPIClient:
     """
     Async client for fetching weather data from REST APIs.
     
     Features:
     - Async HTTP requests using httpx
-    - Exponential backoff retry logic (max 3 retries)
-    - Comprehensive error handling
+    - Retry logic with exponential backoff (max 3 retries)
+    - Proper error handling for network and response errors
     - Type hints throughout
     
     Attributes:
-        base_url: Base URL of the weather API
+        base_url: The base URL of the weather API
         api_key: Optional API key for authentication
         max_retries: Maximum number of retry attempts (default: 3)
-        initial_backoff: Initial backoff delay in seconds (default: 1)
+        timeout: Request timeout in seconds (default: 30)
     """
     
     def __init__(
@@ -53,91 +48,33 @@ class WeatherAPIClient:
         base_url: str,
         api_key: Optional[str] = None,
         max_retries: int = 3,
-        initial_backoff: float = 1.0,
         timeout: float = 30.0
     ) -> None:
         """
-        Initialize the Weather API Client.
+        Initialize the WeatherAPIClient.
         
         Args:
-            base_url: Base URL of the weather API (e.g., "https://api.weather.com")
+            base_url: The base URL of the weather API (e.g., "https://api.weather.com")
             api_key: Optional API key for authentication
             max_retries: Maximum number of retry attempts (default: 3)
-            initial_backoff: Initial backoff delay in seconds (default: 1.0)
-            timeout: Request timeout in seconds (default: 30.0)
+            timeout: Request timeout in seconds (default: 30)
         """
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
         self.max_retries = max_retries
-        self.initial_backoff = initial_backoff
         self.timeout = timeout
-        self._client: Optional[httpx.AsyncClient] = None
-    
-    async def __aenter__(self) -> "WeatherAPIClient":
-        """Async context manager entry."""
-        self._client = httpx.AsyncClient(timeout=self.timeout)
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        """Async context manager exit."""
-        if self._client:
-            await self._client.aclose()
-            self._client = None
-    
-    def _get_client(self) -> httpx.AsyncClient:
-        """Get or create HTTP client."""
-        if self._client is None:
-            self._client = httpx.AsyncClient(timeout=self.timeout)
-        return self._client
-    
-    def _build_headers(self) -> Dict[str, str]:
-        """
-        Build request headers including API key if provided.
-        
-        Returns:
-            Dictionary of HTTP headers
-        """
-        headers = {
-            "Accept": "application/json",
-            "User-Agent": "WeatherAPIClient/1.0"
-        }
-        
-        if self.api_key:
-            headers["X-API-Key"] = self.api_key
-        
-        return headers
-    
-    def _build_params(self, **kwargs) -> Dict[str, Any]:
-        """
-        Build query parameters including API key if not in headers.
-        
-        Args:
-            **kwargs: Additional query parameters
-            
-        Returns:
-            Dictionary of query parameters
-        """
-        params = dict(kwargs)
-        
-        # Some APIs expect API key as query parameter
-        if self.api_key and "api_key" not in params:
-            params["api_key"] = self.api_key
-        
-        return params
     
     async def _make_request_with_retry(
         self,
-        method: str,
         endpoint: str,
-        **kwargs
+        params: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Make HTTP request with exponential backoff retry logic.
+        Make an HTTP request with retry logic and exponential backoff.
         
         Args:
-            method: HTTP method (GET, POST, etc.)
             endpoint: API endpoint path
-            **kwargs: Additional arguments to pass to httpx request
+            params: Optional query parameters
             
         Returns:
             Parsed JSON response as dictionary
@@ -145,76 +82,94 @@ class WeatherAPIClient:
         Raises:
             NetworkError: When network-related errors occur after all retries
             InvalidResponseError: When API returns invalid response
-            APIKeyError: When API key is invalid or missing
         """
+        if params is None:
+            params = {}
+        
+        # Add API key to params if provided
+        if self.api_key:
+            params['apikey'] = self.api_key
+        
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
-        client = self._get_client()
         
-        last_exception: Optional[Exception] = None
-        
-        for attempt in range(self.max_retries + 1):
-            try:
-                response = await client.request(method, url, **kwargs)
-                
-                # Check for authentication errors
-                if response.status_code == 401:
-                    raise APIKeyError(
-                        f"Invalid or missing API key. Status code: {response.status_code}"
-                    )
-                
-                # Check for client errors (4xx)
-                if 400 <= response.status_code < 500:
-                    raise InvalidResponseError(
-                        f"Client error: {response.status_code} - {response.text}"
-                    )
-                
-                # Check for server errors (5xx) - these are retryable
-                if response.status_code >= 500:
-                    raise NetworkError(
-                        f"Server error: {response.status_code} - {response.text}"
-                    )
-                
-                # Raise for other non-2xx status codes
-                response.raise_for_status()
-                
-                # Parse JSON response
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            for attempt in range(self.max_retries):
                 try:
-                    return response.json()
-                except Exception as e:
-                    raise InvalidResponseError(
-                        f"Failed to parse JSON response: {str(e)}"
-                    ) from e
+                    response = await client.get(url, params=params)
+                    
+                    # Check for HTTP errors
+                    if response.status_code == 404:
+                        raise InvalidResponseError(
+                            f"Resource not found: {url}"
+                        )
+                    elif response.status_code == 401:
+                        raise InvalidResponseError(
+                            "Authentication failed. Check your API key."
+                        )
+                    elif response.status_code == 429:
+                        # Rate limit - wait longer before retry
+                        if attempt < self.max_retries - 1:
+                            wait_time = 2 ** (attempt + 2)  # 4, 8, 16 seconds
+                            await asyncio.sleep(wait_time)
+                            continue
+                        raise NetworkError("Rate limit exceeded")
+                    
+                    response.raise_for_status()
+                    
+                    # Parse JSON response
+                    try:
+                        data = response.json()
+                        return data
+                    except ValueError as e:
+                        raise InvalidResponseError(
+                            f"Invalid JSON response: {str(e)}"
+                        )
                 
-            except httpx.TimeoutException as e:
-                last_exception = NetworkError(f"Request timeout: {str(e)}")
-            except httpx.NetworkError as e:
-                last_exception = NetworkError(f"Network error: {str(e)}")
-            except httpx.HTTPStatusError as e:
-                last_exception = NetworkError(f"HTTP error: {str(e)}")
-            except (APIKeyError, InvalidResponseError):
-                # Don't retry on authentication or client errors
-                raise
-            except Exception as e:
-                last_exception = WeatherAPIError(f"Unexpected error: {str(e)}")
-            
-            # If this wasn't the last attempt, wait before retrying
-            if attempt < self.max_retries:
-                backoff_time = self.initial_backoff * (2 ** attempt)
-                await asyncio.sleep(backoff_time)
-            else:
-                # All retries exhausted
-                if last_exception:
-                    raise last_exception
+                except httpx.TimeoutException as e:
+                    if attempt < self.max_retries - 1:
+                        # Exponential backoff: 1s, 2s, 4s
+                        wait_time = 2 ** attempt
+                        await asyncio.sleep(wait_time)
+                        continue
+                    raise NetworkError(
+                        f"Request timeout after {self.max_retries} attempts: {str(e)}"
+                    )
+                
+                except httpx.NetworkError as e:
+                    if attempt < self.max_retries - 1:
+                        # Exponential backoff: 1s, 2s, 4s
+                        wait_time = 2 ** attempt
+                        await asyncio.sleep(wait_time)
+                        continue
+                    raise NetworkError(
+                        f"Network error after {self.max_retries} attempts: {str(e)}"
+                    )
+                
+                except httpx.HTTPStatusError as e:
+                    # Don't retry on client errors (4xx except 429)
+                    if 400 <= e.response.status_code < 500 and e.response.status_code != 429:
+                        raise InvalidResponseError(
+                            f"HTTP {e.response.status_code}: {str(e)}"
+                        )
+                    
+                    # Retry on server errors (5xx)
+                    if attempt < self.max_retries - 1:
+                        wait_time = 2 ** attempt
+                        await asyncio.sleep(wait_time)
+                        continue
+                    raise NetworkError(
+                        f"HTTP error after {self.max_retries} attempts: {str(e)}"
+                    )
         
-        # This should never be reached, but just in case
-        raise NetworkError("All retry attempts failed")
+        # Should never reach here, but for type safety
+        raise NetworkError("Request failed unexpectedly")
     
     async def get_current_weather(self, city: str) -> Dict[str, Any]:
         """
-        Get current weather data for a city.
+        Fetch current weather data for a specific city.
         
         Args:
-            city: Name of the city to get weather for
+            city: Name of the city (e.g., "London", "New York")
             
         Returns:
             Dictionary containing current weather data
@@ -222,113 +177,117 @@ class WeatherAPIClient:
         Raises:
             NetworkError: When network-related errors occur
             InvalidResponseError: When API returns invalid response
-            APIKeyError: When API key is invalid or missing
+            ValueError: When city parameter is empty
             
         Example:
-            >>> async with WeatherAPIClient("https://api.weather.com", "your-api-key") as client:
-            ...     weather = await client.get_current_weather("London")
-            ...     print(weather)
+            >>> client = WeatherAPIClient("https://api.weather.com", api_key="your_key")
+            >>> weather = await client.get_current_weather("London")
+            >>> print(weather)
         """
         if not city or not city.strip():
-            raise ValueError("City name cannot be empty")
+            raise ValueError("City parameter cannot be empty")
         
-        params = self._build_params(q=city)
-        headers = self._build_headers()
+        params = {
+            'q': city.strip(),
+            'type': 'current'
+        }
         
-        return await self._make_request_with_retry(
-            method="GET",
-            endpoint="/current",
-            params=params,
-            headers=headers
-        )
+        try:
+            data = await self._make_request_with_retry('weather', params)
+            return data
+        except (NetworkError, InvalidResponseError) as e:
+            # Re-raise with additional context
+            raise type(e)(f"Failed to fetch current weather for '{city}': {str(e)}")
     
     async def get_forecast(self, city: str, days: int) -> Dict[str, Any]:
         """
-        Get weather forecast for a city.
+        Fetch weather forecast for a specific city.
         
         Args:
-            city: Name of the city to get forecast for
-            days: Number of days to forecast (must be positive)
+            city: Name of the city (e.g., "London", "New York")
+            days: Number of days for the forecast (typically 1-14)
             
         Returns:
-            Dictionary containing forecast data
+            Dictionary containing weather forecast data
             
         Raises:
-            ValueError: When days is not positive
             NetworkError: When network-related errors occur
             InvalidResponseError: When API returns invalid response
-            APIKeyError: When API key is invalid or missing
+            ValueError: When city is empty or days is invalid
             
         Example:
-            >>> async with WeatherAPIClient("https://api.weather.com", "your-api-key") as client:
-            ...     forecast = await client.get_forecast("Paris", days=5)
-            ...     print(forecast)
+            >>> client = WeatherAPIClient("https://api.weather.com", api_key="your_key")
+            >>> forecast = await client.get_forecast("London", days=5)
+            >>> print(forecast)
         """
         if not city or not city.strip():
-            raise ValueError("City name cannot be empty")
+            raise ValueError("City parameter cannot be empty")
         
-        if days <= 0:
-            raise ValueError("Number of days must be positive")
+        if days < 1:
+            raise ValueError("Days parameter must be at least 1")
         
-        params = self._build_params(q=city, days=days)
-        headers = self._build_headers()
+        if days > 14:
+            raise ValueError("Days parameter cannot exceed 14")
         
-        return await self._make_request_with_retry(
-            method="GET",
-            endpoint="/forecast",
-            params=params,
-            headers=headers
-        )
+        params = {
+            'q': city.strip(),
+            'days': days,
+            'type': 'forecast'
+        }
+        
+        try:
+            data = await self._make_request_with_retry('forecast', params)
+            return data
+        except (NetworkError, InvalidResponseError) as e:
+            # Re-raise with additional context
+            raise type(e)(
+                f"Failed to fetch {days}-day forecast for '{city}': {str(e)}"
+            )
     
-    async def close(self) -> None:
-        """
-        Close the HTTP client and cleanup resources.
-        
-        Should be called when done using the client if not using context manager.
-        """
-        if self._client:
-            await self._client.aclose()
-            self._client = None
+    async def __aenter__(self) -> 'WeatherAPIClient':
+        """Async context manager entry."""
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Async context manager exit."""
+        # Cleanup if needed
+        pass
 
 
 # Example usage
 async def main():
     """Example usage of WeatherAPIClient."""
-    
-    # Using context manager (recommended)
-    async with WeatherAPIClient(
-        base_url="https://api.weatherapi.com/v1",
-        api_key="your-api-key-here"
-    ) as client:
-        try:
-            # Get current weather
-            current = await client.get_current_weather("London")
-            print(f"Current weather: {current}")
-            
-            # Get 5-day forecast
-            forecast = await client.get_forecast("Paris", days=5)
-            print(f"Forecast: {forecast}")
-            
-        except APIKeyError as e:
-            print(f"API Key error: {e}")
-        except InvalidResponseError as e:
-            print(f"Invalid response: {e}")
-        except NetworkError as e:
-            print(f"Network error: {e}")
-        except WeatherAPIError as e:
-            print(f"Weather API error: {e}")
-    
-    # Alternative: Manual resource management
+    # Initialize client
     client = WeatherAPIClient(
         base_url="https://api.weatherapi.com/v1",
-        api_key="your-api-key-here"
+        api_key="your_api_key_here"
     )
+    
     try:
-        current = await client.get_current_weather("Tokyo")
+        # Fetch current weather
+        print("Fetching current weather for London...")
+        current = await client.get_current_weather("London")
         print(f"Current weather: {current}")
-    finally:
-        await client.close()
+        
+        # Fetch 5-day forecast
+        print("\nFetching 5-day forecast for New York...")
+        forecast = await client.get_forecast("New York", days=5)
+        print(f"Forecast: {forecast}")
+        
+    except WeatherAPIError as e:
+        print(f"Weather API error: {e}")
+    except ValueError as e:
+        print(f"Invalid input: {e}")
+    
+    # Using context manager
+    async with WeatherAPIClient(
+        base_url="https://api.weatherapi.com/v1",
+        api_key="your_api_key_here"
+    ) as client:
+        weather = await client.get_current_weather("Paris")
+        print(f"\nParis weather: {weather}")
 
 
 if __name__ == "__main__":
+    # Run the example
     asyncio.run(main())

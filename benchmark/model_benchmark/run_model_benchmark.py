@@ -183,60 +183,63 @@ def print_summary(report, report_paths: dict):
     # Per-model summary table
     print("\n## Per-Model Summary\n")
     
-    # Header
+    # Header - widths: #=4, Model=27, Success=10, AvgTime=12, AvgThink=14, AvgTokens=14, TokSec=12, AvgCost=14, TotalThink=16, TotalTokens=16, TotalCost=14
     header = (
-        f"| {'Model':<25} |"
-        f" {'Success':<8} |"
-        f" {'Avg Time':>10} |"
-        f" {'Avg In':>8} |"
-        f" {'Avg Out':>8} |"
-        f" {'Avg Think':>10} |"
-        f" {'Avg Total':>10} |"
-        f" {'Total In':>10} |"
-        f" {'Total Out':>10} |"
-        f" {'Total Think':>12} |"
-        f" {'Total Tok':>10} |"
-        f" {'Total Cost':>11} |"
+        f"| {'#':>2} "
+        f"| {'Model':<25} "
+        f"| {'Success':<8} "
+        f"| {'Avg Time':>10} "
+        f"| {'Avg Think':>12} "
+        f"| {'Avg Tokens':>12} "
+        f"| {'Tok/Sec':>10} "
+        f"| {'Avg Cost':>12} "
+        f"| {'Total Think':>14} "
+        f"| {'Total Tokens':>14} "
+        f"| {'Total Cost':>12} |"
     )
     separator = (
-        f"|{'-'*27}|"
-        f"{'-'*10}|"
-        f"{'-'*12}|"
-        f"{'-'*10}|"
-        f"{'-'*10}|"
-        f"{'-'*12}|"
-        f"{'-'*12}|"
-        f"{'-'*12}|"
-        f"{'-'*12}|"
-        f"{'-'*14}|"
-        f"{'-'*12}|"
-        f"{'-'*13}|"
+        f"|{'-'*4}"
+        f"|{'-'*27}"
+        f"|{'-'*10}"
+        f"|{'-'*12}"
+        f"|{'-'*14}"
+        f"|{'-'*14}"
+        f"|{'-'*12}"
+        f"|{'-'*14}"
+        f"|{'-'*16}"
+        f"|{'-'*16}"
+        f"|{'-'*14}|"
     )
     
     print(header)
     print(separator)
     
+    # Sort models by total tokens (ascending)
+    sorted_models = sorted(report.model_reports.values(), key=lambda m: m.total_tokens)
+    
     # Per-model rows
-    for model_report in report.model_reports.values():
+    for rank, model_report in enumerate(sorted_models, 1):
         success = model_report.successful_tasks
         total = model_report.total_tasks
         
         # Format success
         status = f"{success}/{total}"
         
+        # Calculate tokens per second
+        tok_per_sec = model_report.avg_total_tokens / model_report.avg_duration_seconds if model_report.avg_duration_seconds > 0 else 0
+        
         row = (
-            f"| {model_report.display_name:<25} |"
-            f" {status:<8} |"
-            f" {model_report.avg_duration_seconds:>9.2f}s |"
-            f" {model_report.avg_prompt_tokens:>8.0f} |"
-            f" {model_report.avg_completion_tokens:>8.0f} |"
-            f" {model_report.avg_thinking_tokens:>10.0f} |"
-            f" {model_report.avg_total_tokens:>10.0f} |"
-            f" {model_report.total_prompt_tokens:>10} |"
-            f" {model_report.total_completion_tokens:>10} |"
-            f" {model_report.total_thinking_tokens:>12} |"
-            f" {model_report.total_tokens:>10} |"
-            f" ${model_report.total_cost_usd:>10.4f} |"
+            f"| {rank:>2} "
+            f"| {model_report.display_name:<25} "
+            f"| {status:<8} "
+            f"| {model_report.avg_duration_seconds:>9.2f}s "
+            f"| {model_report.avg_thinking_tokens:>12,.0f} "
+            f"| {model_report.avg_total_tokens:>12,.0f} "
+            f"| {tok_per_sec:>10,.0f} "
+            f"| ${model_report.avg_cost_usd:>11.4f} "
+            f"| {model_report.total_thinking_tokens:>14,} "
+            f"| {model_report.total_tokens:>14,} "
+            f"| ${model_report.total_cost_usd:>11.4f} |"
         )
         print(row)
     
