@@ -245,6 +245,52 @@ def print_summary(report, report_paths: dict):
     
     print("\n" + "=" * 120)
     
+    # Per-task summary
+    print("\n## Per-Task Summary\n")
+    
+    # Collect all unique task IDs
+    task_ids = set()
+    for model_report in report.model_reports.values():
+        for task_result in model_report.task_results:
+            task_ids.add(task_result.task_id)
+    task_ids = sorted(task_ids)
+    
+    if task_ids:
+        # Get sorted models for consistent column order
+        sorted_model_names = sorted([m.display_name for m in report.model_reports.values()])
+        
+        # Print header
+        task_header = f"| {'Task':<30} |"
+        for model_name in sorted_model_names:
+            # Truncate model name if too long
+            short_name = model_name[:15] if len(model_name) > 15 else model_name
+            task_header += f" {short_name:<15} |"
+        print(task_header)
+        
+        task_sep = f"|{'-'*32}|"
+        for _ in sorted_model_names:
+            task_sep += f"{'-'*17}|"
+        print(task_sep)
+        
+        # Print each task row
+        for task_id in task_ids:
+            row = f"| {task_id:<30} |"
+            for model_name in sorted_model_names:
+                model_report = next((m for m in report.model_reports.values() if m.display_name == model_name), None)
+                if model_report:
+                    task_result = next((r for r in model_report.task_results if r.task_id == task_id), None)
+                    if task_result:
+                        status = "✓" if task_result.success else "✗"
+                        cell = f"{status} {task_result.total_tokens:,} tok"
+                        row += f" {cell:<15} |"
+                    else:
+                        row += f" {'-':<15} |"
+                else:
+                    row += f" {'-':<15} |"
+            print(row)
+        
+        print()
+    
     # Show failed models details if any
     failed_models = [m for m in report.model_reports.values() if m.failed_tasks > 0]
     if failed_models:

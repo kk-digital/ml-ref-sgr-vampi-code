@@ -20,14 +20,50 @@ class ReportGenerator:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
     
+    def _sanitize_name(self, name: str) -> str:
+        """Sanitize model/task name for use as directory name."""
+        # Replace problematic characters with underscores
+        for char in ['/', '\\', ':', '*', '?', '"', '<', '>', '|', ' ']:
+            name = name.replace(char, '_')
+        return name
+    
     def generate_all(self) -> dict[str, Path]:
         """Generate all report formats and return paths."""
         paths = {}
+        # Save individual task results per model/task
+        self.save_per_task_results()
         paths["json"] = self.generate_json_report()
         paths["summary"] = self.generate_summary_report()
         paths["csv"] = self.generate_csv_report()
         paths["markdown"] = self.generate_markdown_report()
         return paths
+    
+    def save_per_task_results(self) -> None:
+        """Save individual task results in benchmark_results/<model_name>/<task_name>/ structure."""
+        for model_name, model_report in self.report.model_reports.items():
+            model_dir_name = self._sanitize_name(model_report.display_name)
+            model_dir = self.output_dir / model_dir_name
+            model_dir.mkdir(parents=True, exist_ok=True)
+            
+            for task_result in model_report.task_results:
+                task_dir_name = self._sanitize_name(task_result.task_id)
+                task_dir = model_dir / task_dir_name
+                task_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Save task result as JSON
+                result_file = task_dir / "result.json"
+                with open(result_file, "w", encoding="utf-8") as f:
+                    json.dump(task_result.model_dump(mode="json"), f, indent=2, default=str)
+                
+                # Save response content separately if available
+                if task_result.response:
+                    response_file = task_dir / "response.txt"
+                    with open(response_file, "w", encoding="utf-8") as f:
+                        f.write(task_result.response)
+                
+                logger.debug(f"Saved task result: {task_dir}")
+            
+            logger.info(f"Saved {len(model_report.task_results)} task results for model: {model_report.display_name}")
     
     def generate_json_report(self) -> Path:
         """Generate detailed JSON report."""
@@ -143,6 +179,52 @@ class ReportGenerator:
         
         lines.append("")
         lines.append("=" * 80)
+        lines.append("PER-TASK SUMMARY")
+        lines.append("=" * 80)
+        lines.append("")
+        
+        # Collect all unique task IDs
+        task_ids = set()
+        for model_report in self.report.model_reports.values():
+            for task_result in model_report.task_results:
+                task_ids.add(task_result.task_id)
+        task_ids = sorted(task_ids)
+        
+        if task_ids:
+            # Get sorted models for consistent column order
+            sorted_model_names = sorted([m.display_name for m in self.report.model_reports.values()])
+            
+            # Print header
+            task_header = f"| {'Task':<30} |"
+            for model_name in sorted_model_names:
+                short_name = model_name[:15] if len(model_name) > 15 else model_name
+                task_header += f" {short_name:<15} |"
+            lines.append(task_header)
+            
+            task_sep = f"|{'-'*32}|"
+            for _ in sorted_model_names:
+                task_sep += f"{'-'*17}|"
+            lines.append(task_sep)
+            
+            # Print each task row
+            for task_id in task_ids:
+                row = f"| {task_id:<30} |"
+                for model_name in sorted_model_names:
+                    model_report = next((m for m in self.report.model_reports.values() if m.display_name == model_name), None)
+                    if model_report:
+                        task_result = next((r for r in model_report.task_results if r.task_id == task_id), None)
+                        if task_result:
+                            status = "✓" if task_result.success else "✗"
+                            cell = f"{status} {task_result.total_tokens:,} tok"
+                            row += f" {cell:<15} |"
+                        else:
+                            row += f" {'-':<15} |"
+                    else:
+                        row += f" {'-':<15} |"
+                lines.append(row)
+        
+        lines.append("")
+        lines.append("=" * 80)
         
         with open(filepath, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
@@ -243,6 +325,11 @@ class ReportGenerator:
             )
         
         lines.append("")
+        lines.append("## Per-Task Summary")
+        lines.append("")
+        lines.append(self._generate_per_task_summary_markdown())
+        lines.append("")
+        
         lines.append("## Detailed Results by Model")
         lines.append("")
         
@@ -282,3 +369,67 @@ class ReportGenerator:
         
         logger.info(f"Markdown report saved: {filepath}")
         return filepath
+    
+    def _generate_per_task_summary_markdown(self) -> str:
+        """Generate per-task summary table in markdown format."""
+        # Collect all unique task IDs
+        task_ids = set()
+        for model_report in self.report.model_reports.values():
+            for task_result in model_report.task_results:
+                task_ids.add(task_result.task_id)
+        task_ids = sorted(task_ids)
+        
+        if not task_ids:
+            return "No tasks found."
+        
+        lines = []
+        
+        # For each task, show results across all models
+        for task_id in task_ids:
+            lines.append(f"### Task: {task_id}")
+            lines.append("")
+            lines.append("| Model | Success | Time | Tokens | Think | Cost |")
+            lines.append("|-------|---------|------|--------|-------|------|")
+            
+            for model_report in sorted(self.report.model_reports.values(), key=lambda m: m.display_name):
+                task_result = next((r for r in model_report.task_results if r.task_id == task_id), None)
+                if task_result:
+                    success = "✓" if task_result.success else "✗"
+                    lines.append(
+                        f"| {model_report.display_name} | "
+                        f"{success} | "
+                        f"{task_result.duration_seconds:.2f}s | "
+                        f"{task_result.total_tokens:,} | "
+                        f"{task_result.thinking_tokens:,} | "
+                        f"${task_result.cost_usd:.4f} |"
+                    )
+                else:
+                    lines.append(f"| {model_report.display_name} | - | - | - | - | - |")
+            
+            lines.append("")
+        
+        return "\n".join(lines)
+    
+    def get_per_task_summary(self) -> dict[str, dict[str, dict]]:
+        """Get per-task summary data structure.
+        
+        Returns:
+            dict mapping task_id -> model_name -> result summary
+        """
+        task_summary = {}
+        
+        for model_report in self.report.model_reports.values():
+            for task_result in model_report.task_results:
+                if task_result.task_id not in task_summary:
+                    task_summary[task_result.task_id] = {}
+                
+                task_summary[task_result.task_id][model_report.display_name] = {
+                    "success": task_result.success,
+                    "duration_seconds": task_result.duration_seconds,
+                    "total_tokens": task_result.total_tokens,
+                    "thinking_tokens": task_result.thinking_tokens,
+                    "cost_usd": task_result.cost_usd,
+                    "error_message": task_result.error_message,
+                }
+        
+        return task_summary
