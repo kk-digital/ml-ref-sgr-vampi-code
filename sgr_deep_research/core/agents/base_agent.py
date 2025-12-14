@@ -254,5 +254,7 @@ class BaseAgent:
             traceback.print_exc()
         finally:
             if self.streaming_generator is not None:
-                self.streaming_generator.finish(usage=self.token_usage.to_dict())
+                usage_dict = self.token_usage.to_dict()
+                self.logger.info(f"Final usage dict has {len(usage_dict.get('request_details', []))} request_details")
+                self.streaming_generator.finish(usage=usage_dict)
             self._save_agent_log()

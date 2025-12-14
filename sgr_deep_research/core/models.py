@@ -82,6 +82,9 @@ class TokenUsage(BaseModel):
     cached_tokens: int = Field(default=0, description="Cached prompt tokens (if available)")
     cost: float = Field(default=0.0, description="Total cost in USD from API")
     
+    # Per-request detailed tracking for benchmarking
+    request_details: list = Field(default_factory=list, description="Detailed per-request data including prompts and outputs")
+    
     def add_usage(self, usage) -> None:
         """Add usage from an OpenAI response.
         
@@ -152,6 +155,35 @@ class TokenUsage(BaseModel):
                 self.cost += float(cost_val)
                 _token_usage_logger.info(f"API cost extracted from dict: ${cost_val}")
     
+    def add_request_detail(self, request_num: int, prompt_messages: list, response_content: str, usage: dict | None = None) -> None:
+        """Add detailed request information for benchmark tracking.
+        
+        Args:
+            request_num: The request number (1-indexed)
+            prompt_messages: The messages sent to the LLM
+            response_content: The LLM's response content
+            usage: Token usage for this specific request
+        """
+        # Truncate prompt messages for storage (keep structure but limit content size)
+        truncated_messages = []
+        for msg in prompt_messages:
+            truncated_msg = {"role": msg.get("role", "unknown")}
+            content = msg.get("content", "")
+            if content:
+                truncated_msg["content"] = content[:2000] + "..." if len(content) > 2000 else content
+            else:
+                truncated_msg["content"] = None
+            if "tool_calls" in msg:
+                truncated_msg["tool_calls"] = msg["tool_calls"]
+            truncated_messages.append(truncated_msg)
+        
+        self.request_details.append({
+            "request_num": request_num,
+            "prompt_messages": truncated_messages,
+            "response_content": response_content[:5000] if len(response_content) > 5000 else response_content,
+            "usage": usage or {},
+        })
+    
     def to_dict(self) -> dict:
         """Return usage as dictionary.
         
@@ -173,7 +205,7 @@ class TokenUsage(BaseModel):
             elif self.total_tokens < calculated_total + self.thinking_tokens:
                 final_total = calculated_total + self.thinking_tokens
         
-        return {
+        result = {
             "prompt_tokens": self.prompt_tokens,
             "completion_tokens": self.completion_tokens,
             "total_tokens": final_total,
@@ -181,6 +213,12 @@ class TokenUsage(BaseModel):
             "cached_tokens": self.cached_tokens,
             "cost": self.cost,
         }
+        
+        # Include request_details if available
+        if self.request_details:
+            result["request_details"] = self.request_details
+        
+        return result
 
 
 class AgentStatistics(BaseModel):

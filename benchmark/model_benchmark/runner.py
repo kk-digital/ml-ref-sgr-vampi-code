@@ -133,6 +133,7 @@ class BenchmarkRunner:
         iterations = 0
         request_count = 0
         request_details = []  # Track per-request input/output/cost details
+        detailed_requests = []  # Track per-request prompts and outputs
         usage_data = None  # Will store actual token usage from final chunk
         seen_tool_call_ids = set()  # Track unique tool call IDs to count actual iterations
         
@@ -172,6 +173,12 @@ class BenchmarkRunner:
                             break
                         try:
                             chunk = json.loads(data)
+                            # Check for request_details in usage (sent with final chunk)
+                            if "usage" in chunk and chunk["usage"]:
+                                if "request_details" in chunk["usage"]:
+                                    for req in chunk["usage"]["request_details"]:
+                                        detailed_requests.append(req)
+                                    logger.debug(f"Task '{task_id}': Found {len(chunk['usage']['request_details'])} request_details in final usage")
                             if "choices" in chunk and chunk["choices"]:
                                 delta = chunk["choices"][0].get("delta", {})
                                 if "content" in delta and delta["content"]:
@@ -185,6 +192,7 @@ class BenchmarkRunner:
                                             iterations += 1
                                             logger.debug(f"Task '{task_id}': New tool call detected: {tc_id} (iteration {iterations})")
                             # Capture usage data from chunks
+                            
                             if "usage" in chunk and chunk["usage"]:
                                 current_usage = chunk["usage"]
                                 # Track each request's usage when we see finish_reason
@@ -214,7 +222,35 @@ class BenchmarkRunner:
         result.success = True
         result.iterations = max(1, iterations)
         result.request_count = max(1, request_count)
-        result.request_details = request_details
+        
+        # Merge detailed_requests (with prompt/response text) into request_details
+        # This ensures each request entry has both token counts AND text content
+        if detailed_requests:
+            # Use detailed_requests as the primary source since it has text content
+            merged_details = []
+            for detail in detailed_requests:
+                req_num = detail.get('request_num', 0)
+                # Find matching token counts from request_details
+                matching_counts = next(
+                    (rd for rd in request_details if rd.get('request_num') == req_num),
+                    {}
+                )
+                merged_entry = {
+                    "request_num": req_num,
+                    "prompt_tokens": matching_counts.get('prompt_tokens', detail.get('usage', {}).get('prompt_tokens', 0)),
+                    "completion_tokens": matching_counts.get('completion_tokens', detail.get('usage', {}).get('completion_tokens', 0)),
+                    "thinking_tokens": matching_counts.get('thinking_tokens', detail.get('usage', {}).get('thinking_tokens', 0)),
+                    "total_tokens": matching_counts.get('total_tokens', detail.get('usage', {}).get('total_tokens', 0)),
+                    "cost": matching_counts.get('cost', detail.get('usage', {}).get('cost')),
+                    # Add text content
+                    "prompt_messages": detail.get('prompt_messages', []),
+                    "response_content": detail.get('response_content', ''),
+                }
+                merged_details.append(merged_entry)
+            result.request_details = merged_details
+        else:
+            result.request_details = request_details
+        result.detailed_requests = detailed_requests  # Keep for backward compatibility
         
         logger.debug(
             f"Task '{task_id}': Streaming complete - "

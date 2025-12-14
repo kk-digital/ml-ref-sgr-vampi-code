@@ -64,6 +64,17 @@ class ReportGenerator:
                     with open(response_file, "w", encoding="utf-8") as f:
                         f.write(task_result.response)
                 
+                # Save detailed per-call prompts and outputs
+                if task_result.detailed_requests:
+                    calls_dir = task_dir / "calls"
+                    calls_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    for req in task_result.detailed_requests:
+                        req_num = req.get('request_num', 0)
+                        call_file = calls_dir / f"call_{req_num:02d}.json"
+                        with open(call_file, "w", encoding="utf-8") as f:
+                            json.dump(req, f, indent=2, default=str)
+                
                 logger.debug(f"Saved task result: {task_dir}")
             
             logger.info(f"Saved {len(model_report.task_results)} task results for model: {model_report.display_name}")
@@ -531,6 +542,61 @@ class ReportGenerator:
                     lines.append("  " + "-" * 90)
                 else:
                     lines.append("  REQUEST DETAILS: No per-request data available")
+                
+                # Detailed per-request prompts and outputs
+                if task_result.detailed_requests:
+                    lines.append("")
+                    lines.append("  DETAILED REQUEST PROMPTS AND OUTPUTS:")
+                    lines.append("  " + "=" * 90)
+                    
+                    for req in task_result.detailed_requests:
+                        req_num = req.get('request_num', '?')
+                        usage = req.get('usage', {})
+                        prompt_tokens = usage.get('prompt_tokens', 0)
+                        completion_tokens = usage.get('completion_tokens', 0)
+                        total_tokens = usage.get('total_tokens', 0)
+                        
+                        lines.append(f"")
+                        lines.append(f"  --- CALL {req_num} ---")
+                        lines.append(f"  Tokens: prompt={prompt_tokens}, completion={completion_tokens}, total={total_tokens}")
+                        lines.append(f"")
+                        
+                        # Show prompt messages
+                        lines.append(f"  PROMPT MESSAGES:")
+                        prompt_messages = req.get('prompt_messages', [])
+                        for i, msg in enumerate(prompt_messages):
+                            role = msg.get('role', 'unknown')
+                            content = msg.get('content', '')
+                            # Truncate long content
+                            if content and len(content) > 500:
+                                content = content[:500] + "... [truncated]"
+                            lines.append(f"    [{i+1}] {role.upper()}:")
+                            if content:
+                                # Indent content lines
+                                for line in content.split('\n')[:10]:  # Limit to first 10 lines
+                                    lines.append(f"        {line[:200]}")
+                                if content.count('\n') > 10:
+                                    lines.append(f"        ... [more lines truncated]")
+                            else:
+                                lines.append(f"        [no content / tool call]")
+                        
+                        lines.append(f"")
+                        lines.append(f"  LLM OUTPUT:")
+                        response_content = req.get('response_content', '')
+                        if response_content:
+                            # Truncate long responses
+                            if len(response_content) > 1000:
+                                response_content = response_content[:1000] + "... [truncated]"
+                            for line in response_content.split('\n')[:20]:  # Limit to first 20 lines
+                                lines.append(f"    {line[:200]}")
+                            if response_content.count('\n') > 20:
+                                lines.append(f"    ... [more lines truncated]")
+                        else:
+                            lines.append(f"    [no response content]")
+                        
+                        lines.append(f"  " + "-" * 90)
+                    
+                    lines.append("  " + "=" * 90)
                 
                 lines.append("")
                 

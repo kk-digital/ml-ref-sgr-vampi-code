@@ -66,6 +66,7 @@ class SGRVampiCodeAgent(SGRResearchAgent):
         self.tool_choice: Literal["required"] = "required"
         self.max_conversation_messages = max_conversation_messages
         self.continuous_mode = False  # Flag to track if this is continuing a conversation
+        self._request_counter = 0  # Track request number for detailed logging (instance attribute)
 
     def _truncate_conversation(self):
         """Truncate conversation to keep last N messages while preserving system prompt.
@@ -218,6 +219,8 @@ class SGRVampiCodeAgent(SGRResearchAgent):
             request_kwargs["stream_options"] = stream_options
         
         last_chunk_usage = None  # Capture usage from final chunk (for Cerebras)
+        messages_for_logging = await self._prepare_context()  # Capture messages for request details
+        response_content_for_logging = ""  # Capture response content
         async with self.openai_client.chat.completions.stream(**request_kwargs) as stream:
             async for event in stream:
                 if event.type == "chunk":
@@ -231,12 +234,41 @@ class SGRVampiCodeAgent(SGRResearchAgent):
                         last_chunk_usage = chunk.model_extra['usage']
             completion = await stream.get_final_completion()
             # Track token usage - prefer completion.usage, fallback to last chunk
+            usage_for_request = None
+            thinking_tokens = 0
             if completion.usage:
                 self.token_usage.add_usage(completion.usage)
+                # Extract thinking tokens from completion_tokens_details if available
+                if hasattr(completion.usage, 'completion_tokens_details') and completion.usage.completion_tokens_details:
+                    thinking_tokens = getattr(completion.usage.completion_tokens_details, 'reasoning_tokens', 0) or 0
+                usage_for_request = {
+                    "prompt_tokens": completion.usage.prompt_tokens or 0,
+                    "completion_tokens": completion.usage.completion_tokens or 0,
+                    "total_tokens": completion.usage.total_tokens or 0,
+                    "thinking_tokens": thinking_tokens,
+                }
             elif last_chunk_usage:
                 self.token_usage.add_usage(last_chunk_usage)
+                usage_for_request = {
+                    "prompt_tokens": getattr(last_chunk_usage, 'prompt_tokens', 0) or 0,
+                    "completion_tokens": getattr(last_chunk_usage, 'completion_tokens', 0) or 0,
+                    "total_tokens": getattr(last_chunk_usage, 'total_tokens', 0) or 0,
+                    "thinking_tokens": 0,
+                }
             reasoning: ReasoningTool = (
                 completion.choices[0].message.tool_calls[0].function.parsed_arguments
+            )
+            
+            # Store request details for benchmark tracking
+            self._request_counter += 1
+            response_content_for_logging = reasoning.model_dump_json()
+            print(f"DEBUG: Storing request details #{self._request_counter} for reasoning phase")
+            self.logger.info(f"Storing request details #{self._request_counter} for reasoning phase")
+            self.token_usage.add_request_detail(
+                request_num=self._request_counter,
+                prompt_messages=messages_for_logging,
+                response_content=response_content_for_logging,
+                usage=usage_for_request,
             )
         
         self.conversation.append(
@@ -265,9 +297,10 @@ class SGRVampiCodeAgent(SGRResearchAgent):
     async def _select_action_phase(self, reasoning: ReasoningTool) -> BaseTool:
         """Select and execute action tool."""
         try:
+            messages_for_logging = await self._prepare_context()  # Capture messages for request details
             request_kwargs = {
                 "model": self.llm_model,
-                "messages": await self._prepare_context(),
+                "messages": messages_for_logging,
                 "max_tokens": config.openai.max_tokens,
                 "temperature": config.openai.temperature,
                 "tools": await self._prepare_tools(),
@@ -294,13 +327,31 @@ class SGRVampiCodeAgent(SGRResearchAgent):
 
             completion = await stream.get_final_completion()
             # Track token usage - prefer completion.usage, fallback to last chunk
+            usage_for_request = None
+            thinking_tokens = 0
             if completion.usage:
                 self.token_usage.add_usage(completion.usage)
+                # Extract thinking tokens from completion_tokens_details if available
+                if hasattr(completion.usage, 'completion_tokens_details') and completion.usage.completion_tokens_details:
+                    thinking_tokens = getattr(completion.usage.completion_tokens_details, 'reasoning_tokens', 0) or 0
+                usage_for_request = {
+                    "prompt_tokens": completion.usage.prompt_tokens or 0,
+                    "completion_tokens": completion.usage.completion_tokens or 0,
+                    "total_tokens": completion.usage.total_tokens or 0,
+                    "thinking_tokens": thinking_tokens,
+                }
             elif last_chunk_usage:
                 self.token_usage.add_usage(last_chunk_usage)
+                usage_for_request = {
+                    "prompt_tokens": getattr(last_chunk_usage, 'prompt_tokens', 0) or 0,
+                    "completion_tokens": getattr(last_chunk_usage, 'completion_tokens', 0) or 0,
+                    "total_tokens": getattr(last_chunk_usage, 'total_tokens', 0) or 0,
+                    "thinking_tokens": 0,
+                }
 
             try:
                 tool = completion.choices[0].message.tool_calls[0].function.parsed_arguments
+                response_content_for_logging = tool.model_dump_json()
             except (IndexError, AttributeError, TypeError):
                 # LLM returned a text response instead of a tool call - treat as completion
                 final_content = completion.choices[0].message.content or "Task completed successfully"
@@ -310,6 +361,17 @@ class SGRVampiCodeAgent(SGRResearchAgent):
                     answer=final_content,
                     status=AgentStatesEnum.COMPLETED,
                 )
+                response_content_for_logging = tool.model_dump_json()
+            
+            # Store request details for benchmark tracking
+            self._request_counter += 1
+            self.logger.info(f"Storing request details #{self._request_counter} for action phase")
+            self.token_usage.add_request_detail(
+                request_num=self._request_counter,
+                prompt_messages=messages_for_logging,
+                response_content=response_content_for_logging,
+                usage=usage_for_request,
+            )
         except Exception as e:
             # Handle validation errors or other streaming issues
             error_msg = str(e)

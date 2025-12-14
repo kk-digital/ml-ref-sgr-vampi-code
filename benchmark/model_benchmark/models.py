@@ -59,7 +59,10 @@ class TaskResult(BaseModel):
     request_count: int = Field(default=1, description="Number of API requests made for this task")
     
     # Per-request details for detailed logging
-    request_details: list[dict] = Field(default_factory=list, description="Details of each API request (input/output tokens, cost)")
+    request_details: list[dict] = Field(default_factory=list, description="Details of each API request including: request_num, prompt_tokens, completion_tokens, thinking_tokens, total_tokens, cost, prompt_messages (list of {role, content}), response_content (LLM output text)")
+    
+    # Detailed per-request prompts and outputs
+    detailed_requests: list[dict] = Field(default_factory=list, description="Detailed per-request data including prompts and LLM outputs")
 
 
 class ModelReport(BaseModel):
