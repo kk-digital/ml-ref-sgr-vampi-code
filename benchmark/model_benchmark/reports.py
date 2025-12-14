@@ -388,7 +388,23 @@ class ReportGenerator:
         
         # For each task, show results across all models
         for task_id in task_ids:
+            # Get task content from first available result
+            task_content = ""
+            for model_report in self.report.model_reports.values():
+                task_result = next((r for r in model_report.task_results if r.task_id == task_id), None)
+                if task_result and task_result.task_content:
+                    task_content = task_result.task_content
+                    break
+            
             lines.append(f"### Task: {task_id}")
+            lines.append("")
+            if task_content:
+                lines.append("**Task Description:**")
+                lines.append("")
+                lines.append(f"> {task_content[:500]}{'...' if len(task_content) > 500 else ''}")
+                lines.append("")
+            
+            lines.append("**Results:**")
             lines.append("")
             lines.append("| Model | Success | Time | Tokens | Think | Cost |")
             lines.append("|-------|---------|------|--------|-------|------|")
@@ -408,6 +424,35 @@ class ReportGenerator:
                 else:
                     lines.append(f"| {model_report.display_name} | - | - | - | - | - |")
             
+            lines.append("")
+            
+            # Add response content for each model
+            lines.append("**Model Responses:**")
+            lines.append("")
+            for model_report in sorted(self.report.model_reports.values(), key=lambda m: m.display_name):
+                task_result = next((r for r in model_report.task_results if r.task_id == task_id), None)
+                if task_result:
+                    lines.append(f"<details>")
+                    lines.append(f"<summary><strong>{model_report.display_name}</strong> {'✓' if task_result.success else '✗'}</summary>")
+                    lines.append("")
+                    if task_result.error_message:
+                        lines.append(f"**Error:** {task_result.error_message}")
+                        lines.append("")
+                    if task_result.response:
+                        lines.append("```")
+                        # Truncate very long responses
+                        response_text = task_result.response
+                        if len(response_text) > 5000:
+                            response_text = response_text[:5000] + "\n\n... [truncated, see full response in models/<model>/<task>/response.txt]"
+                        lines.append(response_text)
+                        lines.append("```")
+                    else:
+                        lines.append("*No response content available*")
+                    lines.append("")
+                    lines.append("</details>")
+                    lines.append("")
+            
+            lines.append("---")
             lines.append("")
         
         return "\n".join(lines)

@@ -291,6 +291,48 @@ def print_summary(report, report_paths: dict):
         
         print()
     
+    # Detailed per-task results with responses
+    print("\n" + "=" * 120)
+    print("DETAILED TASK RESULTS")
+    print("=" * 120)
+    
+    for task_id in task_ids:
+        # Get task content from first available result
+        task_content = ""
+        for model_report in report.model_reports.values():
+            task_result = next((r for r in model_report.task_results if r.task_id == task_id), None)
+            if task_result and task_result.task_content:
+                task_content = task_result.task_content
+                break
+        
+        print(f"\n{'─' * 120}")
+        print(f"TASK: {task_id}")
+        print(f"{'─' * 120}")
+        if task_content:
+            # Truncate long task descriptions
+            display_content = task_content[:300] + "..." if len(task_content) > 300 else task_content
+            print(f"Description: {display_content}")
+        print()
+        
+        # Show each model's result for this task
+        for model_report in sorted(report.model_reports.values(), key=lambda m: m.display_name):
+            task_result = next((r for r in model_report.task_results if r.task_id == task_id), None)
+            if task_result:
+                status = "✓ SUCCESS" if task_result.success else "✗ FAILED"
+                print(f"  [{model_report.display_name}] {status}")
+                print(f"    Time: {task_result.duration_seconds:.2f}s | Tokens: {task_result.total_tokens:,} | Think: {task_result.thinking_tokens:,} | Cost: ${task_result.cost_usd:.4f}")
+                
+                if task_result.error_message:
+                    print(f"    Error: {task_result.error_message}")
+                
+                if task_result.response:
+                    # Show truncated response
+                    response_preview = task_result.response[:500].replace('\n', ' ')
+                    if len(task_result.response) > 500:
+                        response_preview += "..."
+                    print(f"    Response: {response_preview}")
+                print()
+    
     # Show failed models details if any
     failed_models = [m for m in report.model_reports.values() if m.failed_tasks > 0]
     if failed_models:
