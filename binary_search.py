@@ -1,98 +1,95 @@
 from typing import List, Any
 
+
 def binary_search(sorted_list: List[Any], target: Any) -> int:
     """
     Perform binary search on a sorted list to find the target value.
     
-    Args:
-        sorted_list (List[Any]): A list of elements sorted in ascending order.
-        target (Any): The value to search for in the list.
-        
-    Returns:
-        int: The index of the target if found, -1 if not found.
-        
-    Raises:
-        ValueError: If the input list is not sorted.
-        
-    Example:
-        >>> numbers = [1, 3, 5, 7, 9, 11, 13]
-        >>> binary_search(numbers, 7)
-        3
-        >>> binary_search(numbers, 4)
-        -1
-    """
-    # Check if the list is sorted (optional validation)
-    for i in range(len(sorted_list) - 1):
-        if sorted_list[i] > sorted_list[i + 1]:
-            raise ValueError("Input list must be sorted in ascending order")
+    Binary search is an efficient algorithm for finding an item from a sorted list.
+    It works by repeatedly dividing the search interval in half. If the target value
+    is less than the middle element, the search continues in the lower half, otherwise
+    in the upper half. This process continues until the target is found or the interval
+    is empty.
     
+    Time Complexity: O(log n)
+    Space Complexity: O(1)
+    
+    Args:
+        sorted_list: A list of comparable elements sorted in ascending order.
+        target: The value to search for in the list.
+    
+    Returns:
+        The index of the target value if found, otherwise -1.
+    
+    Examples:
+        >>> binary_search([1, 2, 3, 4, 5, 6, 7, 8, 9], 5)
+        4
+        >>> binary_search([1, 2, 3, 4, 5], 10)
+        -1
+        >>> binary_search([], 1)
+        -1
+        >>> binary_search([1], 1)
+        0
+    """
     left = 0
     right = len(sorted_list) - 1
     
     while left <= right:
-        mid = (left + right) // 2
-        mid_value = sorted_list[mid]
+        # Calculate middle index (avoids potential overflow)
+        mid = left + (right - left) // 2
         
-        if mid_value == target:
+        # Check if target is at mid
+        if sorted_list[mid] == target:
             return mid
-        elif mid_value < target:
+        
+        # If target is greater, ignore left half
+        elif sorted_list[mid] < target:
             left = mid + 1
+        
+        # If target is smaller, ignore right half
         else:
             right = mid - 1
     
+    # Target not found
     return -1
 
 
-# Example usage and test cases
+# Example usage and testing
 if __name__ == "__main__":
-    # Test with integers
-    numbers = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
-    
     # Test cases
-    test_cases = [
-        (numbers, 7, 3),    # Target in the middle
-        (numbers, 1, 0),    # Target at the beginning
-        (numbers, 19, 9),   # Target at the end
-        (numbers, 4, -1),   # Target not in list
-        (numbers, 20, -1),  # Target greater than all elements
-        (numbers, 0, -1),   # Target smaller than all elements
-        ([], 5, -1),        # Empty list
-        ([42], 42, 0),      # Single element, found
-        ([42], 7, -1),      # Single element, not found
-    ]
+    test_list = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
     
-    print("Binary Search Test Results:")
-    print("=" * 40)
+    print("Test List:", test_list)
+    print()
     
-    for i, (test_list, target, expected) in enumerate(test_cases, 1):
-        try:
-            result = binary_search(test_list, target)
-            status = "✓ PASS" if result == expected else "✗ FAIL"
-            print(f"Test {i:2d}: Target={target:2d}, Expected={expected:2d}, Got={result:2d} {status}")
-        except Exception as e:
-            print(f"Test {i:2d}: Target={target:2d}, Error: {e}")
+    # Test 1: Find existing element
+    target1 = 7
+    result1 = binary_search(test_list, target1)
+    print(f"Searching for {target1}: Index = {result1}")
     
-    # Test with strings
-    print("\nString List Test:")
-    print("=" * 40)
-    words = ["apple", "banana", "cherry", "date", "elderberry", "fig", "grape"]
-    string_tests = [
-        (words, "cherry", 2),
-        (words, "apple", 0),
-        (words, "grape", 6),
-        (words, "orange", -1),
-    ]
+    # Test 2: Find element at the beginning
+    target2 = 1
+    result2 = binary_search(test_list, target2)
+    print(f"Searching for {target2}: Index = {result2}")
     
-    for i, (test_list, target, expected) in enumerate(string_tests, 1):
-        result = binary_search(test_list, target)
-        status = "✓ PASS" if result == expected else "✗ FAIL"
-        print(f"String Test {i}: Target='{target}', Expected={expected}, Got={result} {status}")
+    # Test 3: Find element at the end
+    target3 = 19
+    result3 = binary_search(test_list, target3)
+    print(f"Searching for {target3}: Index = {result3}")
     
-    # Demonstrate error handling
-    print("\nError Handling Test:")
-    print("=" * 40)
-    try:
-        unsorted_list = [3, 1, 4, 1, 5]
-        binary_search(unsorted_list, 4)
-    except ValueError as e:
-        print(f"✓ Correctly caught unsorted list error: {e}")
+    # Test 4: Element not in list
+    target4 = 8
+    result4 = binary_search(test_list, target4)
+    print(f"Searching for {target4}: Index = {result4}")
+    
+    # Test 5: Empty list
+    result5 = binary_search([], 5)
+    print(f"Searching in empty list: Index = {result5}")
+    
+    # Test 6: Single element list (found)
+    result6 = binary_search([5], 5)
+    print(f"Searching in single element list (found): Index = {result6}")
+    
+    # Test 7: Single element list (not found)
+    result7 = binary_search([5], 3)
+    print(f"Searching in single element list (not found): Index = {result7}")

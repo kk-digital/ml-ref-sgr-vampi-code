@@ -17,7 +17,9 @@ class ReportGenerator:
     
     def __init__(self, report: BenchmarkReport, output_dir: str = "benchmark_results"):
         self.report = report
-        self.output_dir = Path(output_dir)
+        # Create benchmark-specific subdirectory
+        self.base_output_dir = Path(output_dir)
+        self.output_dir = self.base_output_dir / report.benchmark_id
         self.output_dir.mkdir(parents=True, exist_ok=True)
     
     def _sanitize_name(self, name: str) -> str:
@@ -39,10 +41,10 @@ class ReportGenerator:
         return paths
     
     def save_per_task_results(self) -> None:
-        """Save individual task results in benchmark_results/<model_name>/<task_name>/ structure."""
+        """Save individual task results in benchmark_results/<benchmark_id>/<model_name>/<task_name>/ structure."""
         for model_name, model_report in self.report.model_reports.items():
             model_dir_name = self._sanitize_name(model_report.display_name)
-            model_dir = self.output_dir / model_dir_name
+            model_dir = self.output_dir / "models" / model_dir_name
             model_dir.mkdir(parents=True, exist_ok=True)
             
             for task_result in model_report.task_results:
