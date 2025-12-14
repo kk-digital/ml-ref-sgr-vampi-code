@@ -131,7 +131,10 @@ class BenchmarkRunner:
         
         response_content = ""
         iterations = 0
+        request_count = 0
+        request_details = []  # Track per-request input/output/cost details
         usage_data = None  # Will store actual token usage from final chunk
+        seen_tool_call_ids = set()  # Track unique tool call IDs to count actual iterations
         
         # Get provider-specific base URL and API key
         llm_base_url = None
@@ -173,11 +176,36 @@ class BenchmarkRunner:
                                 delta = chunk["choices"][0].get("delta", {})
                                 if "content" in delta and delta["content"]:
                                     response_content += delta["content"]
-                                if "tool_calls" in delta:
-                                    iterations += 1
-                            # Capture usage data from final chunk (has finish_reason)
+                                # Count unique tool calls by ID (not streaming chunks)
+                                if "tool_calls" in delta and delta["tool_calls"]:
+                                    for tc in delta["tool_calls"]:
+                                        tc_id = tc.get("id")
+                                        if tc_id and tc_id not in seen_tool_call_ids:
+                                            seen_tool_call_ids.add(tc_id)
+                                            iterations += 1
+                                            logger.debug(f"Task '{task_id}': New tool call detected: {tc_id} (iteration {iterations})")
+                            # Capture usage data from chunks
                             if "usage" in chunk and chunk["usage"]:
-                                usage_data = chunk["usage"]
+                                current_usage = chunk["usage"]
+                                # Track each request's usage when we see finish_reason
+                                finish_reason = chunk["choices"][0].get("finish_reason") if chunk.get("choices") else None
+                                if finish_reason or current_usage.get("prompt_tokens", 0) > 0:
+                                    request_count += 1
+                                    request_detail = {
+                                        "request_num": request_count,
+                                        "prompt_tokens": current_usage.get("prompt_tokens", 0) or 0,
+                                        "completion_tokens": current_usage.get("completion_tokens", 0) or 0,
+                                        "thinking_tokens": current_usage.get("thinking_tokens", 0) or 0,
+                                        "total_tokens": current_usage.get("total_tokens", 0) or 0,
+                                        "cost": current_usage.get("cost"),
+                                    }
+                                    # Check for reasoning tokens in details
+                                    details = current_usage.get("completion_tokens_details", {})
+                                    if details and details.get("reasoning_tokens"):
+                                        request_detail["thinking_tokens"] = details.get("reasoning_tokens", 0)
+                                    request_details.append(request_detail)
+                                    logger.debug(f"Task '{task_id}': Request #{request_count} usage: {request_detail}")
+                                usage_data = current_usage
                                 logger.debug(f"Task '{task_id}': Captured usage from chunk: {usage_data}")
                         except json.JSONDecodeError:
                             pass
@@ -185,6 +213,14 @@ class BenchmarkRunner:
         result.response = response_content
         result.success = True
         result.iterations = max(1, iterations)
+        result.request_count = max(1, request_count)
+        result.request_details = request_details
+        
+        logger.debug(
+            f"Task '{task_id}': Streaming complete - "
+            f"iterations={iterations} (unique tool calls: {len(seen_tool_call_ids)}), "
+            f"requests={request_count}"
+        )
         
         # Extract actual token usage and cost from API response
         logger.debug(f"Task '{task_id}': Raw usage_data from API: {usage_data}")
@@ -317,6 +353,7 @@ class BenchmarkRunner:
             report.total_tokens = sum(r.total_tokens for r in successful_results)
             report.total_thinking_tokens = sum(r.thinking_tokens for r in successful_results)
             report.total_cost_usd = sum(r.cost_usd for r in successful_results)
+            report.total_requests = sum(r.request_count for r in successful_results)
             
             n = len(successful_results)
             report.avg_duration_seconds = report.total_duration_seconds / n
@@ -326,6 +363,7 @@ class BenchmarkRunner:
             report.avg_thinking_tokens = report.total_thinking_tokens / n
             report.avg_cost_usd = report.total_cost_usd / n
             report.avg_iterations = sum(r.iterations for r in successful_results) / n
+            report.avg_requests_per_task = report.total_requests / n
         
         logger.info(
             f"Model '{model_config.get_display_name()}' completed: "

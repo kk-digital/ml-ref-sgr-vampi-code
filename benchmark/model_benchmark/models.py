@@ -56,6 +56,10 @@ class TaskResult(BaseModel):
     
     # Metadata
     iterations: int = Field(default=0, description="Number of agent iterations")
+    request_count: int = Field(default=1, description="Number of API requests made for this task")
+    
+    # Per-request details for detailed logging
+    request_details: list[dict] = Field(default_factory=list, description="Details of each API request (input/output tokens, cost)")
 
 
 class ModelReport(BaseModel):
@@ -86,6 +90,8 @@ class ModelReport(BaseModel):
     total_tokens: int = Field(default=0, description="Total tokens used")
     total_thinking_tokens: int = Field(default=0, description="Total thinking tokens")
     total_cost_usd: float = Field(default=0.0, description="Total cost in USD")
+    total_requests: int = Field(default=0, description="Total number of API requests")
+    avg_requests_per_task: float = Field(default=0.0, description="Average requests per task")
     
     # Individual results
     task_results: list[TaskResult] = Field(default_factory=list, description="Individual task results")

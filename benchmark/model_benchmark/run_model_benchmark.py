@@ -183,11 +183,12 @@ def print_summary(report, report_paths: dict):
     # Per-model summary table
     print("\n## Per-Model Summary\n")
     
-    # Header - widths: #=4, Model=27, Success=10, AvgTime=12, AvgThink=14, AvgTokens=14, TokSec=12, AvgCost=14, TotalThink=16, TotalTokens=16, TotalCost=14
+    # Header - widths: #=4, Model=27, Success=10, Requests=10, AvgTime=12, AvgThink=14, AvgTokens=14, TokSec=12, AvgCost=14, TotalThink=16, TotalTokens=16, TotalCost=14
     header = (
         f"| {'#':>2} "
         f"| {'Model':<25} "
         f"| {'Success':<8} "
+        f"| {'Requests':>8} "
         f"| {'Avg Time':>10} "
         f"| {'Avg Think':>12} "
         f"| {'Avg Tokens':>12} "
@@ -200,6 +201,7 @@ def print_summary(report, report_paths: dict):
     separator = (
         f"|{'-'*4}"
         f"|{'-'*27}"
+        f"|{'-'*10}"
         f"|{'-'*10}"
         f"|{'-'*12}"
         f"|{'-'*14}"
@@ -232,6 +234,7 @@ def print_summary(report, report_paths: dict):
             f"| {rank:>2} "
             f"| {model_report.display_name:<25} "
             f"| {status:<8} "
+            f"| {model_report.total_requests:>8} "
             f"| {model_report.avg_duration_seconds:>9.2f}s "
             f"| {model_report.avg_thinking_tokens:>12,.0f} "
             f"| {model_report.avg_total_tokens:>12,.0f} "

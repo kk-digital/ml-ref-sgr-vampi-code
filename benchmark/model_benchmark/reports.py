@@ -38,6 +38,7 @@ class ReportGenerator:
         paths["summary"] = self.generate_summary_report()
         paths["csv"] = self.generate_csv_report()
         paths["markdown"] = self.generate_markdown_report()
+        paths["request_log"] = self.generate_request_log()
         return paths
     
     def save_per_task_results(self) -> None:
@@ -122,6 +123,8 @@ class ReportGenerator:
             lines.append(f"    - Total Tokens: {model_report.total_tokens}")
             lines.append(f"    - Total Thinking Tokens: {model_report.total_thinking_tokens}")
             lines.append(f"    - Total Cost: ${model_report.total_cost_usd:.6f}")
+            lines.append(f"    - Total Requests: {model_report.total_requests}")
+            lines.append(f"    - Avg Requests/Task: {model_report.avg_requests_per_task:.1f}")
             lines.append("")
         
         lines.append("=" * 80)
@@ -133,6 +136,7 @@ class ReportGenerator:
             f"| {'#':>2} "
             f"| {'Model':<25} "
             f"| {'Success':<8} "
+            f"| {'Requests':>8} "
             f"| {'Avg Time':>10} "
             f"| {'Avg Think':>12} "
             f"| {'Avg Tokens':>12} "
@@ -145,6 +149,7 @@ class ReportGenerator:
         separator = (
             f"|{'-'*4}"
             f"|{'-'*27}"
+            f"|{'-'*10}"
             f"|{'-'*10}"
             f"|{'-'*12}"
             f"|{'-'*14}"
@@ -168,6 +173,7 @@ class ReportGenerator:
                 f"| {rank:>2} "
                 f"| {model_report.display_name:<25} "
                 f"| {success_rate:<8} "
+                f"| {model_report.total_requests:>8} "
                 f"| {model_report.avg_duration_seconds:>9.2f}s "
                 f"| {model_report.avg_thinking_tokens:>12,.0f} "
                 f"| {model_report.avg_total_tokens:>12,.0f} "
@@ -252,6 +258,7 @@ class ReportGenerator:
             "thinking_tokens",
             "cost_usd",
             "iterations",
+            "request_count",
             "error_message",
         ]
         
@@ -271,6 +278,7 @@ class ReportGenerator:
                     str(task_result.thinking_tokens),
                     f"{task_result.cost_usd:.8f}",
                     str(task_result.iterations),
+                    str(task_result.request_count),
                     task_result.error_message or "",
                 ]
                 rows.append(",".join(row))
@@ -304,8 +312,8 @@ class ReportGenerator:
         
         lines.append("## Summary Comparison")
         lines.append("")
-        lines.append("| # | Model | Success | Avg Time | Avg Think | Avg Tokens | Tok/Sec | Avg Cost | Total Think | Total Tokens | Total Cost |")
-        lines.append("|---|-------|---------|----------|-----------|------------|---------|----------|-------------|--------------|------------|")
+        lines.append("| # | Model | Success | Requests | Avg Time | Avg Think | Avg Tokens | Tok/Sec | Avg Cost | Total Think | Total Tokens | Total Cost |")
+        lines.append("|---|-------|---------|----------|----------|-----------|------------|---------|----------|-------------|--------------|------------|")
         
         # Sort models by total tokens (ascending)
         sorted_models = sorted(self.report.model_reports.values(), key=lambda m: m.total_tokens)
@@ -316,6 +324,7 @@ class ReportGenerator:
             lines.append(
                 f"| {rank} | {model_report.display_name} | "
                 f"{success_rate} | "
+                f"{model_report.total_requests} | "
                 f"{model_report.avg_duration_seconds:.2f}s | "
                 f"{model_report.avg_thinking_tokens:,.0f} | "
                 f"{model_report.avg_total_tokens:,.0f} | "
@@ -457,6 +466,111 @@ class ReportGenerator:
         
         return "\n".join(lines)
     
+    def generate_request_log(self) -> Path:
+        """Generate detailed request log showing all API calls per task per model."""
+        filename = f"{self.report.benchmark_id}_request_log.txt"
+        filepath = self.output_dir / filename
+        
+        lines = []
+        lines.append("=" * 120)
+        lines.append("DETAILED REQUEST LOG - ALL API CALLS PER TASK PER MODEL")
+        lines.append("=" * 120)
+        lines.append("")
+        lines.append(f"Benchmark ID: {self.report.benchmark_id}")
+        lines.append(f"Generated: {datetime.now().isoformat()}")
+        lines.append("")
+        
+        # Per-model section
+        for model_name, model_report in self.report.model_reports.items():
+            lines.append("=" * 120)
+            lines.append(f"MODEL: {model_report.display_name}")
+            lines.append(f"Provider: {model_report.provider.value}")
+            lines.append(f"Total Tasks: {model_report.total_tasks}")
+            lines.append(f"Total Requests: {model_report.total_requests}")
+            lines.append(f"Avg Requests/Task: {model_report.avg_requests_per_task:.2f}")
+            lines.append("=" * 120)
+            lines.append("")
+            
+            # Per-task section
+            for task_result in model_report.task_results:
+                lines.append("-" * 100)
+                lines.append(f"TASK: {task_result.task_id}")
+                lines.append(f"Status: {'SUCCESS' if task_result.success else 'FAILED'}")
+                lines.append(f"Duration: {task_result.duration_seconds:.2f}s")
+                lines.append(f"Total Requests: {task_result.request_count}")
+                lines.append("-" * 100)
+                lines.append("")
+                
+                # Task-level summary
+                lines.append("  TASK SUMMARY:")
+                lines.append(f"    Prompt Tokens: {task_result.prompt_tokens:,}")
+                lines.append(f"    Completion Tokens: {task_result.completion_tokens:,}")
+                lines.append(f"    Thinking Tokens: {task_result.thinking_tokens:,}")
+                lines.append(f"    Total Tokens: {task_result.total_tokens:,}")
+                lines.append(f"    Cost: ${task_result.cost_usd:.6f}")
+                lines.append(f"    Iterations: {task_result.iterations}")
+                lines.append("")
+                
+                # Per-request details
+                if task_result.request_details:
+                    lines.append("  REQUEST DETAILS:")
+                    lines.append("  " + "-" * 90)
+                    lines.append(f"  | {'#':>3} | {'Prompt':>12} | {'Completion':>12} | {'Thinking':>12} | {'Total':>12} | {'Cost':>12} |")
+                    lines.append("  " + "-" * 90)
+                    
+                    for req in task_result.request_details:
+                        cost_str = f"${req['cost']:.6f}" if req.get('cost') is not None else "N/A"
+                        lines.append(
+                            f"  | {req['request_num']:>3} "
+                            f"| {req['prompt_tokens']:>12,} "
+                            f"| {req['completion_tokens']:>12,} "
+                            f"| {req['thinking_tokens']:>12,} "
+                            f"| {req['total_tokens']:>12,} "
+                            f"| {cost_str:>12} |"
+                        )
+                    lines.append("  " + "-" * 90)
+                else:
+                    lines.append("  REQUEST DETAILS: No per-request data available")
+                
+                lines.append("")
+                
+                if task_result.error_message:
+                    lines.append(f"  ERROR: {task_result.error_message}")
+                    lines.append("")
+            
+            lines.append("")
+        
+        # Grand summary
+        lines.append("=" * 120)
+        lines.append("GRAND SUMMARY")
+        lines.append("=" * 120)
+        lines.append("")
+        
+        # Summary table header
+        lines.append(f"| {'Model':<30} | {'Tasks':>6} | {'Requests':>10} | {'Req/Task':>10} | {'Total Tokens':>14} | {'Total Cost':>12} |")
+        lines.append("|" + "-" * 32 + "|" + "-" * 8 + "|" + "-" * 12 + "|" + "-" * 12 + "|" + "-" * 16 + "|" + "-" * 14 + "|")
+        
+        for model_report in sorted(self.report.model_reports.values(), key=lambda m: m.display_name):
+            lines.append(
+                f"| {model_report.display_name:<30} "
+                f"| {model_report.total_tasks:>6} "
+                f"| {model_report.total_requests:>10} "
+                f"| {model_report.avg_requests_per_task:>10.2f} "
+                f"| {model_report.total_tokens:>14,} "
+                f"| ${model_report.total_cost_usd:>11.4f} |"
+            )
+        
+        lines.append("")
+        lines.append(f"Total Cost Across All Models: ${self.report.total_cost_usd:.6f}")
+        lines.append("")
+        lines.append("=" * 120)
+        
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+        
+        logger.info(f"Request log saved: {filepath}")
+        return filepath
+    
     def get_per_task_summary(self) -> dict[str, dict[str, dict]]:
         """Get per-task summary data structure.
         
@@ -477,6 +591,8 @@ class ReportGenerator:
                     "thinking_tokens": task_result.thinking_tokens,
                     "cost_usd": task_result.cost_usd,
                     "error_message": task_result.error_message,
+                    "request_count": task_result.request_count,
+                    "request_details": task_result.request_details,
                 }
         
         return task_summary
