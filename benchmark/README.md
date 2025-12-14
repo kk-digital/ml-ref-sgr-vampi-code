@@ -62,7 +62,7 @@ export CEREBRAS_API_KEY="your-cerebras-key-here"
 
 ```bash
 # Start the API server (default port: 8010)
-uv run python -m sgr_deep_research.api
+uv run python -m sgr_deep_research
 ```
 
 Keep this terminal running. The API should be available at `http://localhost:8010`.
@@ -73,13 +73,12 @@ Open a **new terminal** and run:
 
 ```bash
 # Run benchmark with ALL models (default)
-uv run python -m benchmark.model_benchmark.run_model_benchmark \
-    --tasks-dir benchmark/model_benchmark/tasks
+uv run python -m benchmark.model_benchmark.run_model_benchmark --tasks-dir benchmark/model_benchmark/tasks
 
 # Or run with specific models
-uv run python -m benchmark.model_benchmark.run_model_benchmark \
-    --tasks-dir benchmark/model_benchmark/tasks \
-    --models claude-sonnet-4.5 gpt-5.1 gemini-2.5-pro
+uv run python -m benchmark.model_benchmark.run_model_benchmark --tasks-dir benchmark/model_benchmark/tasks --models claude-sonnet-4.5 gpt-5.1 gemini-2.5-pro
+
+uv run python -m benchmark.model_benchmark.run_model_benchmark --tasks-dir benchmark/model_benchmark/tasks --models grok-4.1-fast
 ```
 
 ### Step 5: View Results
@@ -179,7 +178,7 @@ task_NNN_description.txt
 The sgr-vampi-code agent API is not running. Start it with:
 
 ```bash
-uv run python -m sgr_deep_research.api
+uv run python -m sgr_deep_research
 ```
 
 ### "OPENROUTER_API_KEY environment variable not set"
