@@ -137,51 +137,38 @@ def get_provider(model_config: ModelConfig) -> BaseProvider:
 
 
 # Default model configurations with pricing
+# NOTE: Use real model names from provider documentation
 DEFAULT_MODELS = [
-    # OpenRouter models
+    # OpenRouter models (real models that exist)
     ModelConfig(
-        name="anthropic/claude-opus-4.5",
+        name="anthropic/claude-sonnet-4",
         provider=ProviderType.OPENROUTER,
-        display_name="Claude Opus 4.5",
-        input_price_per_million=15.0,
-        output_price_per_million=75.0,
-    ),
-    ModelConfig(
-        name="anthropic/claude-sonnet-4.5",
-        provider=ProviderType.OPENROUTER,
-        display_name="Claude Sonnet 4.5",
+        display_name="Claude Sonnet 4",
         input_price_per_million=3.0,
         output_price_per_million=15.0,
     ),
     ModelConfig(
-        name="z-ai/glm-4.6",
+        name="openai/gpt-4o-mini",
         provider=ProviderType.OPENROUTER,
-        display_name="GLM 4.6",
-        input_price_per_million=0.30,
-        output_price_per_million=0.90,
+        display_name="GPT-4o Mini",
+        input_price_per_million=0.15,
+        output_price_per_million=0.60,
     ),
     ModelConfig(
-        name="openai/gpt-5.1",
+        name="google/gemini-2.0-flash-001",
         provider=ProviderType.OPENROUTER,
-        display_name="GPT-5.1",
-        input_price_per_million=2.50,
-        output_price_per_million=10.0,
+        display_name="Gemini 2.0 Flash",
+        input_price_per_million=0.10,
+        output_price_per_million=0.40,
     ),
+    # Cerebras models (real models from Cerebras API)
     ModelConfig(
-        name="x-ai/grok-4.1-fast",
-        provider=ProviderType.OPENROUTER,
-        display_name="Grok 4.1 Fast",
-        input_price_per_million=0.20,
-        output_price_per_million=0.50,
+        name="llama3.1-8b",
+        provider=ProviderType.CEREBRAS,
+        display_name="Llama 3.1 8B (Cerebras)",
+        input_price_per_million=0.0,
+        output_price_per_million=0.0,
     ),
-    ModelConfig(
-        name="google/gemini-3-pro-preview",
-        provider=ProviderType.OPENROUTER,
-        display_name="Gemini 3 Pro",
-        input_price_per_million=1.25,
-        output_price_per_million=10.0,
-    ),
-    # Cerebras models
     ModelConfig(
         name="zai-glm-4.6",
         provider=ProviderType.CEREBRAS,

@@ -145,10 +145,12 @@ class GrepTool(BaseTool):
     Use this tool to find text patterns across files in the repository.
     """
 
-    pattern: str = Field(description="Search pattern (supports regex)")
+    # Note: Field renamed from 'pattern' to 'search_pattern' for Cerebras API compatibility
+    # Cerebras confuses property names with JSON schema keywords
+    search_pattern: str = Field(description="Search pattern (supports regex)")
     path: str = Field(default=".", description="Directory or file to search in")
     case_insensitive: bool = Field(default=False, description="Perform case-insensitive search")
-    file_pattern: str | None = Field(default=None, description="File pattern to filter (e.g., '*.py')")
+    file_filter: str | None = Field(default=None, description="File pattern to filter (e.g., '*.py')")
     context_lines: int = Field(default=0, description="Number of context lines to show before/after match")
     max_results: int = Field(default=100, description="Maximum number of results to return")
 
@@ -168,10 +170,10 @@ class GrepTool(BaseTool):
             if self.context_lines > 0:
                 cmd.extend(["-C", str(self.context_lines)])
             
-            if self.file_pattern:
-                cmd.extend(["--include", self.file_pattern])
+            if self.file_filter:
+                cmd.extend(["--include", self.file_filter])
             
-            cmd.append(self.pattern)
+            cmd.append(self.search_pattern)
             cmd.append(search_path)
             
             process = await asyncio.create_subprocess_exec(
@@ -188,7 +190,7 @@ class GrepTool(BaseTool):
             output = stdout.decode()
             
             if not output:
-                return f"No matches found for pattern: {self.pattern}"
+                return f"No matches found for pattern: {self.search_pattern}"
             
             lines = output.splitlines()
             if len(lines) > self.max_results:
@@ -197,7 +199,7 @@ class GrepTool(BaseTool):
             else:
                 result = "\n".join(lines)
             
-            return f"Search results for '{self.pattern}':\n\n{result}"
+            return f"Search results for '{self.search_pattern}':\n\n{result}"
             
         except Exception as e:
             logger.error(f"Error running grep: {e}")
@@ -379,7 +381,8 @@ class FindFilesTool(BaseTool):
     Use this tool to locate files matching a pattern.
     """
 
-    pattern: str = Field(description="File name pattern (supports wildcards like *.py)")
+    # Note: Field renamed from 'pattern' to 'name_pattern' for Cerebras API compatibility
+    name_pattern: str = Field(description="File name pattern (supports wildcards like *.py)")
     path: str = Field(default=".", description="Directory to search in")
     max_results: int = Field(default=100, description="Maximum number of results")
 
@@ -391,7 +394,7 @@ class FindFilesTool(BaseTool):
                 base_path = Path(context.working_directory).expanduser().resolve()
                 search_path = str((base_path / search_path).resolve())
             
-            cmd = ["find", search_path, "-type", "f", "-name", self.pattern]
+            cmd = ["find", search_path, "-type", "f", "-name", self.name_pattern]
             
             process = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -407,7 +410,7 @@ class FindFilesTool(BaseTool):
             output = stdout.decode().strip()
             
             if not output:
-                return f"No files found matching pattern: {self.pattern}"
+                return f"No files found matching pattern: {self.name_pattern}"
             
             files = output.splitlines()
             
@@ -417,7 +420,7 @@ class FindFilesTool(BaseTool):
             else:
                 result = "\n".join(files)
             
-            return f"Files matching '{self.pattern}':\n\n{result}"
+            return f"Files matching '{self.name_pattern}':\n\n{result}"
             
         except Exception as e:
             logger.error(f"Error finding files: {e}")

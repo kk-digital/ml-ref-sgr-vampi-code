@@ -159,25 +159,6 @@ class SGRVampiCodeAgent(SGRResearchAgent):
             self.logger.warning(f"Failed to load code_system_prompt.txt: {e}, using default")
             return PromptLoader.get_system_prompt(self.toolkit)
 
-    def _strip_unsupported_schema_fields(self, schema: dict) -> dict:
-        """Strip JSON schema fields not supported by Cerebras.
-        
-        Cerebras rejects schemas with minItems, maxItems, and other 
-        'informational' fields. This recursively removes them.
-        """
-        unsupported_fields = {"minItems", "maxItems", "minLength", "maxLength", 
-                             "minimum", "maximum", "pattern", "format"}
-        
-        def strip_recursive(obj):
-            if isinstance(obj, dict):
-                return {k: strip_recursive(v) for k, v in obj.items() 
-                        if k not in unsupported_fields}
-            elif isinstance(obj, list):
-                return [strip_recursive(item) for item in obj]
-            return obj
-        
-        return strip_recursive(schema)
-    
     async def _prepare_tools(self) -> list[ChatCompletionFunctionToolParam]:
         """Prepare available tools for current agent state and progress."""
         tools = set(self.toolkit)

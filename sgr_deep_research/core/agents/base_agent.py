@@ -127,6 +127,28 @@ class BaseAgent:
         else:
             # For other providers, try minimal params
             return {}
+    
+    def _strip_unsupported_schema_fields(self, schema: dict) -> dict:
+        """Strip JSON schema fields not supported by Cerebras.
+        
+        Cerebras rejects schemas with minItems, maxItems, minLength, maxLength,
+        and other 'informational' validation fields. This recursively removes them.
+        
+        Should be called when self._provider_type == "cerebras" before sending
+        tool schemas or response_format schemas to the API.
+        """
+        unsupported_fields = {"minItems", "maxItems", "minLength", "maxLength", 
+                             "minimum", "maximum", "pattern", "format"}
+        
+        def strip_recursive(obj):
+            if isinstance(obj, dict):
+                return {k: strip_recursive(v) for k, v in obj.items() 
+                        if k not in unsupported_fields}
+            elif isinstance(obj, list):
+                return [strip_recursive(item) for item in obj]
+            return obj
+        
+        return strip_recursive(schema)
 
     async def provide_clarification(self, clarifications: str):
         """Receive clarification from external source (e.g. user input)"""

@@ -1,7 +1,7 @@
-from typing import List, Any
+from typing import List
 
 
-def binary_search(sorted_list: List[Any], target: Any) -> int:
+def binary_search(sorted_list: List[int], target: int) -> int:
     """
     Perform binary search on a sorted list to find the target value.
     
@@ -15,18 +15,19 @@ def binary_search(sorted_list: List[Any], target: Any) -> int:
     Space Complexity: O(1)
     
     Args:
-        sorted_list: A list of comparable elements sorted in ascending order.
-        target: The value to search for in the list.
+        sorted_list: A list of integers sorted in ascending order.
+        target: The integer value to search for in the list.
     
     Returns:
-        The index of the target value if found, otherwise -1.
+        The index of the target value if found in the list.
+        Returns -1 if the target is not found.
     
     Examples:
         >>> binary_search([1, 2, 3, 4, 5, 6, 7, 8, 9], 5)
         4
         >>> binary_search([1, 2, 3, 4, 5], 10)
         -1
-        >>> binary_search([], 1)
+        >>> binary_search([], 5)
         -1
         >>> binary_search([1], 1)
         0
@@ -35,7 +36,7 @@ def binary_search(sorted_list: List[Any], target: Any) -> int:
     right = len(sorted_list) - 1
     
     while left <= right:
-        # Calculate middle index (avoids potential overflow)
+        # Calculate middle index (avoiding potential overflow)
         mid = left + (right - left) // 2
         
         # Check if target is at mid
@@ -62,23 +63,23 @@ if __name__ == "__main__":
     print("Test List:", test_list)
     print()
     
-    # Test 1: Find existing element
+    # Test 1: Target exists in the list
     target1 = 7
     result1 = binary_search(test_list, target1)
     print(f"Searching for {target1}: Index = {result1}")
     
-    # Test 2: Find element at the beginning
-    target2 = 1
+    # Test 2: Target doesn't exist
+    target2 = 8
     result2 = binary_search(test_list, target2)
     print(f"Searching for {target2}: Index = {result2}")
     
-    # Test 3: Find element at the end
-    target3 = 19
+    # Test 3: Target at the beginning
+    target3 = 1
     result3 = binary_search(test_list, target3)
     print(f"Searching for {target3}: Index = {result3}")
     
-    # Test 4: Element not in list
-    target4 = 8
+    # Test 4: Target at the end
+    target4 = 19
     result4 = binary_search(test_list, target4)
     print(f"Searching for {target4}: Index = {result4}")
     
@@ -88,8 +89,8 @@ if __name__ == "__main__":
     
     # Test 6: Single element list (found)
     result6 = binary_search([5], 5)
-    print(f"Searching in single element list (found): Index = {result6}")
+    print(f"Searching for 5 in [5]: Index = {result6}")
     
     # Test 7: Single element list (not found)
     result7 = binary_search([5], 3)
-    print(f"Searching in single element list (not found): Index = {result7}")
+    print(f"Searching for 3 in [5]: Index = {result7}")
