@@ -198,6 +198,92 @@ class ReportGenerator:
         
         lines.append("")
         lines.append("=" * 80)
+        lines.append("PER-CALL DETAILS")
+        lines.append("=" * 80)
+        lines.append("")
+        lines.append("Detailed breakdown of each API call for each model and task.")
+        lines.append("")
+        
+        # For each model, show per-call details
+        for model_report in sorted(self.report.model_reports.values(), key=lambda m: m.display_name):
+            lines.append("-" * 80)
+            lines.append(f"Model: {model_report.display_name}")
+            lines.append("-" * 80)
+            lines.append("")
+            
+            for task_result in model_report.task_results:
+                lines.append(f"  Task: {task_result.task_id}")
+                lines.append(f"  Status: {'✓ SUCCESS' if task_result.success else '✗ FAILED'}")
+                lines.append(f"  Total Duration: {task_result.duration_seconds:.2f}s")
+                lines.append(f"  Total Requests: {task_result.request_count}")
+                lines.append("")
+                
+                if task_result.request_details:
+                    # Per-call table header
+                    call_header = (
+                        f"  | {'Call':>4} "
+                        f"| {'Input Tok':>10} "
+                        f"| {'Output Tok':>10} "
+                        f"| {'Think Tok':>10} "
+                        f"| {'Total Tok':>10} "
+                        f"| {'Cost':>12} "
+                        f"| {'Time':>8} |"
+                    )
+                    call_sep = (
+                        f"  |{'-'*6}"
+                        f"|{'-'*12}"
+                        f"|{'-'*12}"
+                        f"|{'-'*12}"
+                        f"|{'-'*12}"
+                        f"|{'-'*14}"
+                        f"|{'-'*10}|"
+                    )
+                    lines.append(call_header)
+                    lines.append(call_sep)
+                    
+                    for req in task_result.request_details:
+                        req_num = req.get('request_num', 0)
+                        prompt_tokens = req.get('prompt_tokens', 0)
+                        completion_tokens = req.get('completion_tokens', 0)
+                        thinking_tokens = req.get('thinking_tokens', 0)
+                        total_tokens = req.get('total_tokens', 0)
+                        cost = req.get('cost', 0.0)
+                        duration = req.get('duration', 0.0)
+                        
+                        cost_str = f"${cost:.6f}" if cost else "$0.000000"
+                        time_str = f"{duration:.2f}s" if duration else "N/A"
+                        
+                        call_row = (
+                            f"  | {req_num:>4} "
+                            f"| {prompt_tokens:>10,} "
+                            f"| {completion_tokens:>10,} "
+                            f"| {thinking_tokens:>10,} "
+                            f"| {total_tokens:>10,} "
+                            f"| {cost_str:>12} "
+                            f"| {time_str:>8} |"
+                        )
+                        lines.append(call_row)
+                    
+                    # Task totals row
+                    lines.append(call_sep)
+                    total_row = (
+                        f"  | {'SUM':>4} "
+                        f"| {task_result.prompt_tokens:>10,} "
+                        f"| {task_result.completion_tokens:>10,} "
+                        f"| {task_result.thinking_tokens:>10,} "
+                        f"| {task_result.total_tokens:>10,} "
+                        f"| ${task_result.cost_usd:>11.6f} "
+                        f"| {task_result.duration_seconds:>7.2f}s |"
+                    )
+                    lines.append(total_row)
+                else:
+                    lines.append("  No per-call details available.")
+                
+                lines.append("")
+            
+            lines.append("")
+        
+        lines.append("=" * 80)
         lines.append("PER-TASK SUMMARY")
         lines.append("=" * 80)
         lines.append("")
@@ -347,6 +433,67 @@ class ReportGenerator:
             )
         
         lines.append("")
+        lines.append("## Per-Call Details")
+        lines.append("")
+        lines.append("Detailed breakdown of each API call for each model and task.")
+        lines.append("")
+        
+        # For each model, show per-call details
+        for model_report in sorted(self.report.model_reports.values(), key=lambda m: m.display_name):
+            lines.append(f"### {model_report.display_name}")
+            lines.append("")
+            
+            for task_result in model_report.task_results:
+                lines.append(f"#### Task: {task_result.task_id}")
+                lines.append("")
+                lines.append(f"- **Status**: {'✓ SUCCESS' if task_result.success else '✗ FAILED'}")
+                lines.append(f"- **Total Duration**: {task_result.duration_seconds:.2f}s")
+                lines.append(f"- **Total Requests**: {task_result.request_count}")
+                lines.append("")
+                
+                if task_result.request_details:
+                    lines.append("| Call | Input Tok | Output Tok | Think Tok | Total Tok | Cost | Time |")
+                    lines.append("|------|-----------|------------|-----------|-----------|------|------|")
+                    
+                    for req in task_result.request_details:
+                        req_num = req.get('request_num', 0)
+                        prompt_tokens = req.get('prompt_tokens', 0)
+                        completion_tokens = req.get('completion_tokens', 0)
+                        thinking_tokens = req.get('thinking_tokens', 0)
+                        total_tokens = req.get('total_tokens', 0)
+                        cost = req.get('cost', 0.0)
+                        duration = req.get('duration', 0.0)
+                        
+                        cost_str = f"${cost:.6f}" if cost else "$0.000000"
+                        time_str = f"{duration:.2f}s" if duration else "N/A"
+                        
+                        lines.append(
+                            f"| {req_num} | "
+                            f"{prompt_tokens:,} | "
+                            f"{completion_tokens:,} | "
+                            f"{thinking_tokens:,} | "
+                            f"{total_tokens:,} | "
+                            f"{cost_str} | "
+                            f"{time_str} |"
+                        )
+                    
+                    # Task totals row
+                    lines.append(
+                        f"| **SUM** | "
+                        f"**{task_result.prompt_tokens:,}** | "
+                        f"**{task_result.completion_tokens:,}** | "
+                        f"**{task_result.thinking_tokens:,}** | "
+                        f"**{task_result.total_tokens:,}** | "
+                        f"**${task_result.cost_usd:.6f}** | "
+                        f"**{task_result.duration_seconds:.2f}s** |"
+                    )
+                else:
+                    lines.append("*No per-call details available.*")
+                
+                lines.append("")
+            
+            lines.append("")
+        
         lines.append("## Per-Task Summary")
         lines.append("")
         lines.append(self._generate_per_task_summary_markdown())
