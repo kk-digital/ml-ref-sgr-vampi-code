@@ -1,0 +1,10 @@
+Analyze the following Python code and suggest improvements for readability, performance, and best practices:
+
+```python
+def process_data(data):
+    result = []
+    for i in range(len(data)):
+        if data[i] != None:
+            result.append(data[i] * 2)
+    return result
+```

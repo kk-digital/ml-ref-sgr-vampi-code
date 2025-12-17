@@ -32,6 +32,9 @@ class SGRResearchAgent(BaseAgent):
         max_searches: int = 4,
         tracking_token: str | None = None,
         working_directory: str = ".",
+        llm_model: str | None = None,
+        llm_base_url: str | None = None,
+        llm_api_key: str | None = None,
     ):
         super().__init__(
             task=task,
@@ -40,6 +43,9 @@ class SGRResearchAgent(BaseAgent):
             max_iterations=max_iterations,
             tracking_token=tracking_token,
             working_directory=working_directory,
+            llm_model=llm_model,
+            llm_base_url=llm_base_url,
+            llm_api_key=llm_api_key,
         )
 
         self.toolkit = [
@@ -67,7 +73,7 @@ class SGRResearchAgent(BaseAgent):
 
     async def _reasoning_phase(self) -> NextStepToolStub:
         request_kwargs = {
-            "model": config.openai.model,
+            "model": self.llm_model,
             "response_format": await self._prepare_tools(),
             "messages": await self._prepare_context(),
             "max_tokens": config.openai.max_tokens,
@@ -75,11 +81,29 @@ class SGRResearchAgent(BaseAgent):
             "extra_body": self._get_extra_body(),
         }
         
+        # Add stream_options only for providers that support it
+        stream_options = self._get_stream_options()
+        if stream_options:
+            request_kwargs["stream_options"] = stream_options
+        
+        last_chunk_usage = None  # Capture usage from final chunk (for Cerebras)
         async with self.openai_client.chat.completions.stream(**request_kwargs) as stream:
             async for event in stream:
                 if event.type == "chunk":
                     self.streaming_generator.add_chunk(event)
-        reasoning: NextStepToolStub = (await stream.get_final_completion()).choices[0].message.parsed  # type: ignore
+                    # Cerebras returns usage in final chunk - check multiple ways
+                    chunk = event.chunk if hasattr(event, 'chunk') else event
+                    if hasattr(chunk, 'usage') and chunk.usage:
+                        last_chunk_usage = chunk.usage
+                    elif hasattr(chunk, 'model_extra') and chunk.model_extra.get('usage'):
+                        last_chunk_usage = chunk.model_extra['usage']
+        completion = await stream.get_final_completion()
+        # Track token usage - prefer completion.usage, fallback to last chunk
+        if completion.usage:
+            self.token_usage.add_usage(completion.usage)
+        elif last_chunk_usage:
+            self.token_usage.add_usage(last_chunk_usage)
+        reasoning: NextStepToolStub = completion.choices[0].message.parsed  # type: ignore
         # we are not fully sure if it should be in conversation or not. Looks like not necessary data
         # self.conversation.append({"role": "assistant", "content": reasoning.model_dump_json(exclude={"function"})})
         self._log_reasoning(reasoning)

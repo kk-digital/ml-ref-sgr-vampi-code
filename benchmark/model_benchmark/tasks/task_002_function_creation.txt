@@ -1,0 +1,4 @@
+Write a Python function that implements a binary search algorithm. The function should:
+1. Take a sorted list and a target value as parameters
+2. Return the index of the target if found, or -1 if not found
+3. Include type hints and a docstring

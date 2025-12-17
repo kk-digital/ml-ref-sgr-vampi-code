@@ -10,7 +10,7 @@ import httpx
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletionFunctionToolParam
 
-from sgr_deep_research.core.models import AgentStatesEnum, ResearchContext
+from sgr_deep_research.core.models import AgentStatesEnum, ResearchContext, TokenUsage
 from sgr_deep_research.core.prompts import PromptLoader
 from sgr_deep_research.core.stream import OpenAIStreamingGenerator
 from sgr_deep_research.core.tools import (
@@ -37,6 +37,9 @@ class BaseAgent:
         max_clarifications: int = 3,
         tracking_token: str | None = None,
         working_directory: str = ".",
+        llm_model: str | None = None,
+        llm_base_url: str | None = None,
+        llm_api_key: str | None = None,
     ):
         self.id = f"{self.name}_{uuid.uuid4()}"
         self.logger = logging.getLogger(f"sgr_deep_research.agents.{self.id}")
@@ -49,21 +52,103 @@ class BaseAgent:
         self.log = []
         self.max_iterations = max_iterations
         self.max_clarifications = max_clarifications
+        
+        # Dynamic LLM configuration (for benchmarking different models)
+        self.llm_model = llm_model or config.openai.model
+        self.llm_base_url = llm_base_url or config.openai.base_url
+        self.llm_api_key = llm_api_key or config.openai.api_key
+        
+        # Detect provider type from base URL for provider-specific handling
+        self._provider_type = self._detect_provider_type()
 
-        client_kwargs = {"base_url": config.openai.base_url, "api_key": config.openai.api_key}
+        client_kwargs = {"base_url": self.llm_base_url, "api_key": self.llm_api_key}
         if config.openai.proxy.strip():
             client_kwargs["http_client"] = httpx.AsyncClient(proxy=config.openai.proxy)
 
         self.openai_client = AsyncOpenAI(**client_kwargs)
         self.streaming_generator = OpenAIStreamingGenerator(model=self.id)
+        
+        # Token usage tracking
+        self.token_usage = TokenUsage()
+    
+    def _detect_provider_type(self) -> str:
+        """Detect provider type from base URL for provider-specific handling."""
+        base_url = self.llm_base_url.lower() if self.llm_base_url else ""
+        if "cerebras" in base_url:
+            return "cerebras"
+        elif "openrouter" in base_url:
+            return "openrouter"
+        elif "anthropic" in base_url:
+            return "anthropic"
+        elif "openai" in base_url or "api.openai.com" in base_url:
+            return "openai"
+        else:
+            return "unknown"
+    
+    def _get_stream_options(self) -> dict | None:
+        """Get stream_options based on provider support.
+        
+        Some providers may not support stream_options parameter.
+        Returns None for providers that don't support it.
+        
+        Note: Cerebras returns usage in final chunk by default but ignores stream_options.
+        We handle this by capturing usage from chunks directly in the agent code.
+        """
+        # Providers known to support stream_options with include_usage
+        # Note: Cerebras ignores stream_options but returns usage in final chunk anyway
+        supported_providers = {"openrouter", "openai", "anthropic", "cerebras"}
+        
+        if self._provider_type in supported_providers:
+            return {"include_usage": True}
+        else:
+            # For unknown providers, try anyway - worst case we get an error
+            # that we can catch and retry without stream_options
+            self.logger.debug(f"Provider '{self._provider_type}' - attempting stream_options")
+            return {"include_usage": True}
 
     def _get_extra_body(self) -> dict:
         """Get extra body parameters for OpenAI requests (e.g., tracking token).
         
         By default, uses agent.id as tracking token for request tracing.
+        Parameters are provider-specific - some providers reject unknown fields.
         """
         tracking_id = self.tracking_token or self.id
-        return {"litellm_session_id": tracking_id}
+        
+        # Provider-specific extra_body parameters
+        if self._provider_type == "openrouter":
+            return {
+                "litellm_session_id": tracking_id,
+                "usage": {"include": True},  # OpenRouter: request usage data including cost
+            }
+        elif self._provider_type == "cerebras":
+            # Cerebras only supports specific extra_body params like disable_reasoning
+            # It rejects unknown parameters with 422 error
+            return {}
+        else:
+            # For other providers, try minimal params
+            return {}
+    
+    def _strip_unsupported_schema_fields(self, schema: dict) -> dict:
+        """Strip JSON schema fields not supported by Cerebras.
+        
+        Cerebras rejects schemas with minItems, maxItems, minLength, maxLength,
+        and other 'informational' validation fields. This recursively removes them.
+        
+        Should be called when self._provider_type == "cerebras" before sending
+        tool schemas or response_format schemas to the API.
+        """
+        unsupported_fields = {"minItems", "maxItems", "minLength", "maxLength", 
+                             "minimum", "maximum", "pattern", "format"}
+        
+        def strip_recursive(obj):
+            if isinstance(obj, dict):
+                return {k: strip_recursive(v) for k, v in obj.items() 
+                        if k not in unsupported_fields}
+            elif isinstance(obj, list):
+                return [strip_recursive(item) for item in obj]
+            return obj
+        
+        return strip_recursive(schema)
 
     async def provide_clarification(self, clarifications: str):
         """Receive clarification from external source (e.g. user input)"""
@@ -191,5 +276,7 @@ class BaseAgent:
             traceback.print_exc()
         finally:
             if self.streaming_generator is not None:
-                self.streaming_generator.finish()
+                usage_dict = self.token_usage.to_dict()
+                self.logger.info(f"Final usage dict has {len(usage_dict.get('request_details', []))} request_details")
+                self.streaming_generator.finish(usage=usage_dict)
             self._save_agent_log()

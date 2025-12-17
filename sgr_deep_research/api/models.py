@@ -45,6 +45,11 @@ class ChatCompletionRequest(BaseModel):
     max_tokens: int | None = Field(default=1500, description="Maximum number of tokens")
     temperature: float | None = Field(default=0, description="Generation temperature")
     tracking_token: str | None = Field(default=None, description="Optional tracking token for request tracing (e.g., litellm_session_id)")
+    
+    # Dynamic LLM configuration for benchmarking
+    llm_model: str | None = Field(default=None, description="LLM model name to use (e.g., 'anthropic/claude-sonnet-4.5')")
+    llm_base_url: str | None = Field(default=None, description="LLM API base URL (e.g., 'https://openrouter.ai/api/v1')")
+    llm_api_key: str | None = Field(default=None, description="LLM API key (optional, uses env var if not provided)")
 
 
 class ChatCompletionChoice(BaseModel):

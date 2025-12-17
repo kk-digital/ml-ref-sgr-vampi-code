@@ -1,187 +1,228 @@
-# 📊 SGR Deep Research - SimpleQA Benchmark
+# Model Benchmark Module
 
-![SimpleQA Benchmark Comparison](../assets/simpleqa_benchmark_comprasion.png)
+Benchmark multiple LLM models through the **sgr-vampi-code agent** and generate comprehensive comparison reports.
 
-Comprehensive benchmark evaluation using the SimpleQA dataset - a factuality benchmark that measures the ability of language models to answer short, fact-seeking questions.
+## Overview
 
-______________________________________________________________________
+This benchmark runs coding tasks through the sgr-vampi-code agent API, testing different LLM backends (via OpenRouter and Cerebras) to compare their performance on real-world coding tasks.
 
-## 📁 About SimpleQA Dataset
+## Requirements
 
-**Link:** https://huggingface.co/datasets/basicv8vc/SimpleQA
+### 1. System Requirements
 
-SimpleQA Verified is a benchmark for evaluating factual accuracy of AI systems. The dataset contains questions with verified correct answers.
+- Python 3.11+
+- [uv](https://github.com/astral-sh/uv) package manager
+- Network access to API endpoints
 
-**Dataset Size:** 4,236 questions
+### 2. API Keys
 
-**Evaluation Categories:**
+| Provider | Environment Variable | Get Key From |
+|----------|---------------------|---------------|
+| OpenRouter | `OPENROUTER_API_KEY` | https://openrouter.ai/keys |
+| Cerebras | `CEREBRAS_API_KEY` | https://cloud.cerebras.ai/ |
 
-- ✅ **CORRECT** - Answer fully contains correct information
-- ❌ **INCORRECT** - Answer contains contradictions or false information
-- ⏭️ **NOT_ATTEMPTED** - System did not attempt to answer the question
+### 3. sgr-vampi-code Agent API
 
-______________________________________________________________________
+The benchmark requires the sgr-vampi-code agent API to be running. This is the core component that executes tasks using the specified LLM models.
 
-## 🎯 Our Results
+---
 
-- **Accuracy:** 86.08%
-- **Correct:** 3,724 answers
-- **Incorrect:** 554 answers
-- **Not Attempted:** 48 answers
+## End-to-End Setup Guide
 
-**Detailed Results:** [simpleqa_result.xlsx](../assets/simpleqa_result.xlsx)
-
-______________________________________________________________________
-
-## ⚙️ Agent Configuration for Benchmark Run
-
-| Component         | Parameter        | Value                  |
-| ----------------- | ---------------- | ---------------------- |
-| **Search Engine** | Provider         | Tavily Basic Search    |
-|                   | Scraping Enabled | Yes                    |
-|                   | Max Pages        | 5                      |
-|                   | Content Limit    | 33,000 characters      |
-| **Agent**         | Name             | sgr_tool_calling_agent |
-|                   | Max Steps        | 20                     |
-| **LLM (Agent)**   | Model            | gpt-4.1-mini           |
-|                   | Max Tokens       | 12,000                 |
-|                   | Temperature      | 0.2                    |
-| **LLM (Judge)**   | Model            | gpt-4o                 |
-|                   | Max Tokens       | Default                |
-|                   | Temperature      | Default                |
-
-______________________________________________________________________
-
-## 🚀 How to Run the Benchmark
-
-### Requirements
-
-Before running the benchmark, ensure you have:
-
-1. **SimpleQA Dataset**: Download from [Hugging Face](https://huggingface.co/datasets/basicv8vc/SimpleQA)
-2. **Judge Model Access**: LLM for grading answers (e.g., GPT-4, Claude, or local model)
-3. **Dependencies**: Install required packages
-   ```bash
-   cd benchmark
-   uv pip install -r requirements.txt  # or pip install openai pandas python-dotenv openpyxl
-   ```
-
-### Environment Variables Setup
-
-The benchmark uses a separate `.env` file for judge model configuration:
-
-1. **Create `.env` file in benchmark directory:**
-
-   ```bash
-   cd benchmark
-   cp env.example .env
-   ```
-
-2. **Configure judge model parameters in `.env`:**
-
-   ```bash
-   # Judge Model Configuration
-   JUDGE_BASE_URL=https://api.openai.com/v1
-   JUDGE_API_KEY=your-api-key-here
-   JUDGE_MODEL_NAME=gpt-4o-mini
-   ```
-
-**Recommended Judge Models:**
-
-- `gpt-4o-mini` - Best cost/quality ratio
-- `gpt-4o` - Maximum accuracy
-- `claude-3-sonnet` - Alternative provider
-- Local model (e.g., `http://localhost:8090/v1`)
-
-### Running the Benchmark
-
-Navigate to the benchmark directory and run:
+### Step 1: Clone and Install Dependencies
 
 ```bash
-cd benchmark
+# Clone the repository
+git clone https://github.com/vamplabAI/sgr-vampi-code.git
+cd sgr-vampi-code
 
-# Basic usage with default settings
-python run_benchmark.py \
-    --path_to_simpleqa ./data/simpleqa_verified.csv \
-    --output_path ./simpleqa_bench_results.xlsx \
-    --n_samples 100 \
-    --batch_size 3
-
-# Process entire dataset with larger batches
-python run_benchmark.py \
-    --path_to_simpleqa ./data/simpleqa_verified.csv \
-    --output_path ./simpleqa_bench_results.xlsx \
-    --batch_size 10
+# Install dependencies with uv
+uv sync
 ```
 
-### Command Line Arguments
-
-| Parameter            | Required | Default                     | Description                                |
-| -------------------- | -------- | --------------------------- | ------------------------------------------ |
-| `--path_to_simpleqa` | Yes      | -                           | Path to simpleqa_verified.csv file         |
-| `--output_path`      | No       | simpleqa_bench_results.xlsx | Path to output Excel file                  |
-| `--n_samples`        | No       | All samples                 | Number of samples to process from dataset  |
-| `--batch_size`       | No       | 10                          | Number of questions to process in parallel |
-
-**Note:** Judge model settings are loaded from `.env` file (JUDGE_BASE_URL, JUDGE_API_KEY, JUDGE_MODEL_NAME)
-
-______________________________________________________________________
-
-## 📊 Output Files
-
-The benchmark generates an Excel file with detailed results:
-
-**Results Excel** (`simpleqa_bench_results.xlsx`):
-
-- Question and ground truth answer
-- Predicted answer from SGR agent
-- Grade classification (CORRECT/INCORRECT/NOT_ATTEMPTED)
-- Detailed grading report with reasoning
-- Error tracking for failed attempts
-
-______________________________________________________________________
-
-## ✨ Benchmark Features
-
-### 🔄 Auto-Resume Support
-
-The benchmark automatically resumes from the last completed question if interrupted. Simply rerun the same command.
-
-### 📊 Batch Processing
-
-Process questions in parallel batches for faster execution (configurable via `--batch_size`)
-
-**Example log output:**
+### Step 2: Configure Environment Variables
 
 ```bash
-2024-01-13 12:00:00 - __main__ - INFO - Using config file: C:\path\to\config.yaml
-2024-01-13 12:00:05 - __main__ - INFO - Started batch 1/34 (questions 1-3)
-2024-01-13 12:00:45 - __main__ - INFO - Completed batch 1/34. Processed questions: 3/100
-2024-01-13 12:00:45 - __main__ - INFO - Started batch 2/34 (questions 4-6)
-...
-2024-01-13 12:45:30 - __main__ - INFO - Benchmark completed!
+# Create .env file in project root
+cp config.yaml.example config.yaml
+
+# Add your API keys to .env file
+echo "OPENROUTER_API_KEY=your-openrouter-key-here" >> .env
+echo "CEREBRAS_API_KEY=your-cerebras-key-here" >> .env
 ```
 
-______________________________________________________________________
+Or set them directly in your shell:
 
-## 🛠️ How It Works
+```bash
+export OPENROUTER_API_KEY="your-openrouter-key-here"
+export CEREBRAS_API_KEY="your-cerebras-key-here"
+```
 
-The benchmark uses the **LLM-as-a-Judge** approach for answer evaluation, where an LLM acts as an impartial judge to assess the correctness of agent responses.
+### Step 3: Start the sgr-vampi-code Agent API
 
-1. **Configuration Loading**: Loads `config.yaml` from project root for SGR agent settings
-2. **Batch Processing**: Processes questions in parallel batches for efficiency
-3. **Research Phase**: Each question is researched by BenchmarkAgent using web search
-4. **Answer Extraction**: Extracts the final answer from agent's execution result
-5. **Judge Grading**: LLM judge evaluates answer against ground truth using structured prompts
-6. **Results Export**: Results are saved to Excel after each batch (auto-resume support)
+```bash
+# Start the API server (default port: 8010)
+uv run python -m sgr_deep_research
+```
 
-______________________________________________________________________
+Keep this terminal running. The API should be available at `http://localhost:8010`.
 
-## 📁 Benchmark Files
+### Step 4: Run the Benchmark
 
-- `run_benchmark.py` - Main benchmark script
-- `benchmark_agent.py` - BenchmarkAgent class
-- `prompts.py` - Grading prompt templates
-- `utils.py` - Utility functions
-- `env.example` - Environment variables example
-- `README.md` - This file
+Open a **new terminal** and run:
+
+```bash
+# Run benchmark with ALL models (default)
+uv run python -m benchmark.model_benchmark.run_model_benchmark --tasks-dir benchmark/model_benchmark/tasks
+
+# Or run with specific models
+uv run python -m benchmark.model_benchmark.run_model_benchmark --tasks-dir benchmark/model_benchmark/tasks --models claude-sonnet-4.5 gpt-5.1 gemini-2.5-pro
+
+uv run python -m benchmark.model_benchmark.run_model_benchmark --tasks-dir benchmark/model_benchmark/tasks --models grok-4.1-fast
+```
+
+### Step 5: View Results
+
+Reports are generated in `benchmark_results/` directory:
+
+```
+benchmark_results/
+├── benchmark_YYYYMMDD_HHMMSS_xxxxx_full.json      # Complete raw data
+├── benchmark_YYYYMMDD_HHMMSS_xxxxx_summary.txt    # Human-readable summary
+├── benchmark_YYYYMMDD_HHMMSS_xxxxx_results.csv    # Spreadsheet format
+└── benchmark_YYYYMMDD_HHMMSS_xxxxx_report.md      # Markdown report
+```
+
+---
+
+## Available Models
+
+### OpenRouter Models (requires `OPENROUTER_API_KEY`)
+
+| Alias | Model ID | Description |
+|-------|----------|-------------|
+| `claude-opus-4.5` | anthropic/claude-opus-4.5 | Claude Opus 4.5 - Frontier reasoning model |
+| `claude-sonnet-4.5` | anthropic/claude-sonnet-4.5 | Claude Sonnet 4.5 - Best for coding |
+| `glm-4.6` | z-ai/glm-4.6 | GLM 4.6 - 200K context |
+| `gpt-5.1` | openai/gpt-5.1 | GPT-5.1 - Latest OpenAI model |
+| `grok-4.1-fast` | x-ai/grok-4.1-fast | Grok 4.1 Fast - 2M context |
+| `gemini-2.5-pro` | google/gemini-2.5-pro | Gemini 2.5 Pro - Google's best |
+
+### Cerebras Models (requires `CEREBRAS_API_KEY`)
+
+| Alias | Model ID | Description |
+|-------|----------|-------------|
+| `cerebras-glm-4.6` | zai-glm-4.6 | GLM 4.6 on Cerebras (ultra-fast inference) |
+
+### List All Models
+
+```bash
+uv run python -m benchmark.model_benchmark.run_model_benchmark --list-models
+```
+
+---
+
+## CLI Reference
+
+```bash
+uv run python -m benchmark.model_benchmark.run_model_benchmark [OPTIONS]
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--tasks-dir` | (required) | Directory containing `.txt` task files |
+| `--output-dir` | `benchmark_results` | Output directory for reports |
+| `--models` | all models | Space-separated list of model aliases |
+| `--batch-size` | `1` | Tasks to run in parallel per model |
+| `--timeout` | `300` | Timeout per task in seconds |
+| `--max-iterations` | `20` | Maximum agent iterations per task |
+| `--list-models` | - | List available models and exit |
+
+---
+
+## Creating Custom Tasks
+
+Tasks are `.txt` files in the tasks directory. Each file contains one coding task:
+
+```bash
+# Example: Create a new task
+echo "Write a Python function that implements binary search on a sorted list." \
+    > benchmark/model_benchmark/tasks/task_007_binary_search.txt
+```
+
+### Task File Naming Convention
+
+```
+task_NNN_description.txt
+```
+
+- `NNN` - Sequential number (001, 002, etc.)
+- `description` - Brief task description (snake_case)
+
+---
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPENROUTER_API_KEY` | - | OpenRouter API key (required for OpenRouter models) |
+| `CEREBRAS_API_KEY` | - | Cerebras API key (required for Cerebras models) |
+| `SGR_API_BASE_URL` | `http://localhost:8010` | sgr-vampi-code agent API URL |
+
+---
+
+## Troubleshooting
+
+### "All connection attempts failed"
+
+The sgr-vampi-code agent API is not running. Start it with:
+
+```bash
+uv run python -m sgr_deep_research
+```
+
+### "OPENROUTER_API_KEY environment variable not set"
+
+Set your API key:
+
+```bash
+export OPENROUTER_API_KEY="your-key-here"
+```
+
+### "No .txt task files found"
+
+Ensure your tasks directory contains `.txt` files:
+
+```bash
+ls benchmark/model_benchmark/tasks/
+```
+
+---
+
+## Architecture
+
+```
+┌─────────────────┐     ┌──────────────────────┐     ┌─────────────────┐
+│  Benchmark CLI  │────▶│  sgr-vampi-code API  │────▶│  LLM Providers  │
+│                 │     │  (localhost:8010)    │     │  - OpenRouter   │
+│  run_model_     │     │                      │     │  - Cerebras     │
+│  benchmark.py   │     │  Agent orchestration │     │                 │
+└─────────────────┘     └──────────────────────┘     └─────────────────┘
+        │                                                    │
+        │                                                    │
+        ▼                                                    ▼
+┌─────────────────┐                              ┌─────────────────┐
+│  Reports        │                              │  Models         │
+│  - JSON         │                              │  - Claude 4.5   │
+│  - CSV          │                              │  - GPT-5.1      │
+│  - Markdown     │                              │  - Gemini 2.5   │
+│  - Summary      │                              │  - Grok 4.1     │
+└─────────────────┘                              │  - GLM 4.6      │
+                                                 └─────────────────┘
+```
+
+---
+
+## License
+
+MIT License - See main project LICENSE file.

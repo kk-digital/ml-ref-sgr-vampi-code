@@ -125,20 +125,21 @@ class ReasoningTool(BaseTool):
     """
 
     # Reasoning chain - step-by-step thinking process (helps stabilize model)
+    # Note: min/max_length relaxed for Cerebras compatibility (ignores schema constraints)
     reasoning_steps: list[str] = Field(
-        description="Step-by-step reasoning (brief, 1 sentence each)",
-        min_length=2,
-        max_length=3,
+        description="Step-by-step reasoning (brief, 1 sentence each, 2-3 steps)",
+        min_length=1,
+        max_length=10,
     )
 
     # Reasoning and state assessment
     current_situation: str = Field(
         description="Current research situation (2-3 sentences MAX)",
-        max_length=300,
+        max_length=1000,
     )
     plan_status: str = Field(
         description="Status of current plan (1 sentence)",
-        max_length=150,
+        max_length=500,
     )
     enough_data: bool = Field(
         default=False,
@@ -149,7 +150,7 @@ class ReasoningTool(BaseTool):
     remaining_steps: list[str] = Field(
         description="1-3 remaining steps (brief, action-oriented)",
         min_length=1,
-        max_length=3,
+        max_length=10,
     )
     task_completed: bool = Field(description="Is the research task finished?")
 

@@ -55,6 +55,48 @@ class OpenAIStreamingGenerator(StreamingGenerator):
         }
         super().add(f"data: {json.dumps(response)}\n\n")
 
+    def add_request_details(self, request_num: int, prompt_messages: list[dict], response_content: str, usage: dict | None = None):
+        """Add detailed request information for benchmark tracking.
+        
+        Args:
+            request_num: The request number (1-indexed)
+            prompt_messages: The messages sent to the LLM
+            response_content: The LLM's response content
+            usage: Token usage for this specific request
+        """
+        # Truncate prompt messages for logging (keep structure but limit content size)
+        truncated_messages = []
+        for msg in prompt_messages:
+            truncated_msg = {"role": msg.get("role", "unknown")}
+            content = msg.get("content", "")
+            if content:
+                # Truncate very long content to avoid huge JSON
+                truncated_msg["content"] = content[:2000] + "..." if len(content) > 2000 else content
+            else:
+                truncated_msg["content"] = None
+            # Include tool_calls if present
+            if "tool_calls" in msg:
+                truncated_msg["tool_calls"] = msg["tool_calls"]
+            truncated_messages.append(truncated_msg)
+        
+        response = {
+            "id": self.id,
+            "object": "chat.completion.chunk",
+            "created": self.created,
+            "model": self.model,
+            "system_fingerprint": self.fingerprint,
+            "choices": [{"index": self.choice_index, "delta": {}, "finish_reason": None}],
+            "request_details": {
+                "request_num": request_num,
+                "prompt_messages": truncated_messages,
+                "response_content": response_content[:5000] if len(response_content) > 5000 else response_content,
+                "usage": usage or {},
+            },
+        }
+        import logging
+        logging.getLogger(__name__).info(f"StreamingGenerator: Adding request_details chunk #{request_num}")
+        super().add(f"data: {json.dumps(response)}\n\n")
+
     def add_tool_call(self, tool_call_id: str, function_name: str, arguments: str):
         """Добавляет tool call chunk."""
         response = {
@@ -84,8 +126,26 @@ class OpenAIStreamingGenerator(StreamingGenerator):
         }
         super().add(f"data: {json.dumps(response)}\n\n")
 
-    def finish(self, finish_reason: str = "stop"):
-        """Завершает stream с финальным chunk и usage."""
+    def finish(self, finish_reason: str = "stop", usage: dict | None = None):
+        """Завершает stream с финальным chunk и usage.
+        
+        Args:
+            finish_reason: Reason for finishing (e.g., 'stop', 'tool_calls')
+            usage: Token usage dictionary with prompt_tokens, completion_tokens, 
+                   total_tokens, and thinking_tokens
+        """
+        # Use provided usage or default to zeros
+        usage_data = usage or {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "thinking_tokens": 0,
+        }
+        # Log if request_details are present
+        if usage and "request_details" in usage:
+            import logging
+            logging.getLogger(__name__).info(f"StreamingGenerator.finish: Sending {len(usage['request_details'])} request_details")
+        
         final_response = {
             "id": self.id,
             "object": "chat.completion.chunk",
@@ -93,7 +153,7 @@ class OpenAIStreamingGenerator(StreamingGenerator):
             "model": self.model,
             "system_fingerprint": f"fp_{hex(hash(self.model))[-8:]}",
             "choices": [{"index": self.choice_index, "delta": {}, "logprobs": None, "finish_reason": finish_reason}],
-            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            "usage": usage_data,
         }
         super().add(f"data: {json.dumps(final_response)}\n\n")
         super().add("data: [DONE]\n\n")

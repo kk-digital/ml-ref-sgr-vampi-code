@@ -1,5 +1,6 @@
 
 
+import copy
 from typing import Literal, Type
 
 from openai import pydantic_function_tool
@@ -41,6 +42,9 @@ class SGRVampiCodeAgent(SGRResearchAgent):
         max_conversation_messages: int = 80,
         tracking_token: str | None = None,
         working_directory: str = ".",
+        llm_model: str | None = None,
+        llm_base_url: str | None = None,
+        llm_api_key: str | None = None,
     ):
         super().__init__(
             task=task,
@@ -50,6 +54,9 @@ class SGRVampiCodeAgent(SGRResearchAgent):
             max_searches=0,  # No web searches for coding agent
             tracking_token=tracking_token,
             working_directory=working_directory,
+            llm_model=llm_model,
+            llm_base_url=llm_base_url,
+            llm_api_key=llm_api_key,
         )
         self.toolkit = [
             *system_agent_tools,
@@ -59,6 +66,7 @@ class SGRVampiCodeAgent(SGRResearchAgent):
         self.tool_choice: Literal["required"] = "required"
         self.max_conversation_messages = max_conversation_messages
         self.continuous_mode = False  # Flag to track if this is continuing a conversation
+        self._request_counter = 0  # Track request number for detailed logging (instance attribute)
 
     def _truncate_conversation(self):
         """Truncate conversation to keep last N messages while preserving system prompt.
@@ -162,12 +170,22 @@ class SGRVampiCodeAgent(SGRResearchAgent):
                 FinalAnswerTool,
             }
         
-        return [pydantic_function_tool(tool, name=tool.tool_name, description="") for tool in tools]
+        tool_params = [pydantic_function_tool(tool, name=tool.tool_name, description="") for tool in tools]
+        
+        # For Cerebras, strip unsupported schema fields
+        if self._provider_type == "cerebras":
+            for tool_param in tool_params:
+                if "function" in tool_param and "parameters" in tool_param["function"]:
+                    tool_param["function"]["parameters"] = self._strip_unsupported_schema_fields(
+                        tool_param["function"]["parameters"]
+                    )
+        
+        return tool_params
 
     async def _reasoning_phase(self) -> ReasoningTool:
         """Reasoning phase with streaming support."""
         request_kwargs = {
-            "model": config.openai.model,
+            "model": self.llm_model,
             "messages": await self._prepare_context(),
             "max_tokens": config.openai.max_tokens,
             "temperature": config.openai.temperature,
@@ -176,12 +194,62 @@ class SGRVampiCodeAgent(SGRResearchAgent):
             "extra_body": self._get_extra_body(),
         }
         
+        # Add stream_options only for providers that support it
+        stream_options = self._get_stream_options()
+        if stream_options:
+            request_kwargs["stream_options"] = stream_options
+        
+        last_chunk_usage = None  # Capture usage from final chunk (for Cerebras)
+        messages_for_logging = await self._prepare_context()  # Capture messages for request details
+        response_content_for_logging = ""  # Capture response content
         async with self.openai_client.chat.completions.stream(**request_kwargs) as stream:
             async for event in stream:
                 if event.type == "chunk":
                     self.streaming_generator.add_chunk(event.chunk)
+                    # Cerebras returns usage in final chunk - check multiple ways
+                    chunk = event.chunk
+                    if hasattr(chunk, 'usage') and chunk.usage:
+                        last_chunk_usage = chunk.usage
+                    # Also check model_extra for non-standard fields
+                    elif hasattr(chunk, 'model_extra') and chunk.model_extra.get('usage'):
+                        last_chunk_usage = chunk.model_extra['usage']
+            completion = await stream.get_final_completion()
+            # Track token usage - prefer completion.usage, fallback to last chunk
+            usage_for_request = None
+            thinking_tokens = 0
+            if completion.usage:
+                self.token_usage.add_usage(completion.usage)
+                # Extract thinking tokens from completion_tokens_details if available
+                if hasattr(completion.usage, 'completion_tokens_details') and completion.usage.completion_tokens_details:
+                    thinking_tokens = getattr(completion.usage.completion_tokens_details, 'reasoning_tokens', 0) or 0
+                usage_for_request = {
+                    "prompt_tokens": completion.usage.prompt_tokens or 0,
+                    "completion_tokens": completion.usage.completion_tokens or 0,
+                    "total_tokens": completion.usage.total_tokens or 0,
+                    "thinking_tokens": thinking_tokens,
+                }
+            elif last_chunk_usage:
+                self.token_usage.add_usage(last_chunk_usage)
+                usage_for_request = {
+                    "prompt_tokens": getattr(last_chunk_usage, 'prompt_tokens', 0) or 0,
+                    "completion_tokens": getattr(last_chunk_usage, 'completion_tokens', 0) or 0,
+                    "total_tokens": getattr(last_chunk_usage, 'total_tokens', 0) or 0,
+                    "thinking_tokens": 0,
+                }
             reasoning: ReasoningTool = (
-                (await stream.get_final_completion()).choices[0].message.tool_calls[0].function.parsed_arguments
+                completion.choices[0].message.tool_calls[0].function.parsed_arguments
+            )
+            
+            # Store request details for benchmark tracking
+            self._request_counter += 1
+            response_content_for_logging = reasoning.model_dump_json()
+            print(f"DEBUG: Storing request details #{self._request_counter} for reasoning phase")
+            self.logger.info(f"Storing request details #{self._request_counter} for reasoning phase")
+            self.token_usage.add_request_detail(
+                request_num=self._request_counter,
+                prompt_messages=messages_for_logging,
+                response_content=response_content_for_logging,
+                usage=usage_for_request,
             )
         
         self.conversation.append(
@@ -210,9 +278,10 @@ class SGRVampiCodeAgent(SGRResearchAgent):
     async def _select_action_phase(self, reasoning: ReasoningTool) -> BaseTool:
         """Select and execute action tool."""
         try:
+            messages_for_logging = await self._prepare_context()  # Capture messages for request details
             request_kwargs = {
-                "model": config.openai.model,
-                "messages": await self._prepare_context(),
+                "model": self.llm_model,
+                "messages": messages_for_logging,
                 "max_tokens": config.openai.max_tokens,
                 "temperature": config.openai.temperature,
                 "tools": await self._prepare_tools(),
@@ -220,15 +289,50 @@ class SGRVampiCodeAgent(SGRResearchAgent):
                 "extra_body": self._get_extra_body(),
             }
             
+            # Add stream_options only for providers that support it
+            stream_options = self._get_stream_options()
+            if stream_options:
+                request_kwargs["stream_options"] = stream_options
+            
+            last_chunk_usage = None  # Capture usage from final chunk (for Cerebras)
             async with self.openai_client.chat.completions.stream(**request_kwargs) as stream:
                 async for event in stream:
                     if event.type == "chunk":
                         self.streaming_generator.add_chunk(event.chunk)
+                        # Cerebras returns usage in final chunk - check multiple ways
+                        chunk = event.chunk
+                        if hasattr(chunk, 'usage') and chunk.usage:
+                            last_chunk_usage = chunk.usage
+                        elif hasattr(chunk, 'model_extra') and chunk.model_extra.get('usage'):
+                            last_chunk_usage = chunk.model_extra['usage']
 
             completion = await stream.get_final_completion()
+            # Track token usage - prefer completion.usage, fallback to last chunk
+            usage_for_request = None
+            thinking_tokens = 0
+            if completion.usage:
+                self.token_usage.add_usage(completion.usage)
+                # Extract thinking tokens from completion_tokens_details if available
+                if hasattr(completion.usage, 'completion_tokens_details') and completion.usage.completion_tokens_details:
+                    thinking_tokens = getattr(completion.usage.completion_tokens_details, 'reasoning_tokens', 0) or 0
+                usage_for_request = {
+                    "prompt_tokens": completion.usage.prompt_tokens or 0,
+                    "completion_tokens": completion.usage.completion_tokens or 0,
+                    "total_tokens": completion.usage.total_tokens or 0,
+                    "thinking_tokens": thinking_tokens,
+                }
+            elif last_chunk_usage:
+                self.token_usage.add_usage(last_chunk_usage)
+                usage_for_request = {
+                    "prompt_tokens": getattr(last_chunk_usage, 'prompt_tokens', 0) or 0,
+                    "completion_tokens": getattr(last_chunk_usage, 'completion_tokens', 0) or 0,
+                    "total_tokens": getattr(last_chunk_usage, 'total_tokens', 0) or 0,
+                    "thinking_tokens": 0,
+                }
 
             try:
                 tool = completion.choices[0].message.tool_calls[0].function.parsed_arguments
+                response_content_for_logging = tool.model_dump_json()
             except (IndexError, AttributeError, TypeError):
                 # LLM returned a text response instead of a tool call - treat as completion
                 final_content = completion.choices[0].message.content or "Task completed successfully"
@@ -238,6 +342,17 @@ class SGRVampiCodeAgent(SGRResearchAgent):
                     answer=final_content,
                     status=AgentStatesEnum.COMPLETED,
                 )
+                response_content_for_logging = tool.model_dump_json()
+            
+            # Store request details for benchmark tracking
+            self._request_counter += 1
+            self.logger.info(f"Storing request details #{self._request_counter} for action phase")
+            self.token_usage.add_request_detail(
+                request_num=self._request_counter,
+                prompt_messages=messages_for_logging,
+                response_content=response_content_for_logging,
+                usage=usage_for_request,
+            )
         except Exception as e:
             # Handle validation errors or other streaming issues
             error_msg = str(e)
